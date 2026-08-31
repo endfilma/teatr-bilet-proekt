@@ -2,17 +2,20 @@ import { useMemo, useState } from 'react';
 import Icon from '@/components/ui/icon';
 import Section from './Section';
 import HallMap, { buildHall, seatPrice } from './HallMap';
-import { shows, seatCategories } from '@/data/theatre';
+import { seatCategories } from '@/data/theatre';
+import { useCatalog } from '@/hooks/useCatalog';
 import { useBooking } from './BookingProvider';
 
 const Tickets = () => {
-  const [showId, setShowId] = useState(shows[0].id);
+  const { sessions, occupied } = useCatalog();
+  const [showId, setShowId] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const { open } = useBooking();
 
-  const show = shows.find((s) => s.id === showId) ?? shows[0];
-  const seed = shows.findIndex((s) => s.id === showId) + 1;
-  const seats = useMemo(() => buildHall(seed), [seed]);
+  const show = sessions.find((s) => s.id === showId) ?? sessions[0];
+  const seed = Math.max(1, sessions.findIndex((s) => s.id === show?.id) + 1);
+  const taken = show?.sessionId ? occupied[show.sessionId] ?? [] : [];
+  const seats = useMemo(() => buildHall(seed, taken), [seed, taken.join(',')]);
 
   const picked = seats.filter((s) => selected.includes(s.id));
   const total = picked.reduce(
@@ -33,7 +36,7 @@ const Tickets = () => {
       lede="Большой зал на 420 мест: партер, амфитеатр и балкон. Цена зависит от категории места, бронь держится 30 минут."
       aside={
         <div className="flex flex-wrap gap-2">
-          {shows.slice(0, 4).map((s) => (
+          {sessions.slice(0, 4).map((s) => (
             <button
               key={s.id}
               onClick={() => {
@@ -42,7 +45,7 @@ const Tickets = () => {
               }}
               className={[
                 'rounded-full px-4 py-2.5 text-sm font-semibold transition-colors',
-                s.id === showId
+                s.id === show?.id
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-foreground/10 hover:bg-foreground/20',
               ].join(' ')}

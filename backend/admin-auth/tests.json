@@ -1,0 +1,10 @@
+{
+  "tests": [
+    {
+      "name": "CORS доступен",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    }
+  ]
+}

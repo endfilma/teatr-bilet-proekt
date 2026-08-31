@@ -1,0 +1,19 @@
+{
+  "tests": [
+    {
+      "name": "Каталог доступен",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Без токена админ-действия запрещены",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "orders"},
+      "expectedStatus": 401,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

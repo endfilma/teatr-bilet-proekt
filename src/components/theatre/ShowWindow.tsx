@@ -1,8 +1,8 @@
-import { Show } from '@/data/theatre';
 import SeatStrip from './SeatStrip';
+import { LiveShow } from '@/hooks/useCatalog';
 import { useBooking } from './BookingProvider';
 
-type Props = { show: Show; index: number };
+type Props = { show: LiveShow; index: number };
 
 const ShowWindow = ({ show, index }: Props) => {
   const { open } = useBooking();

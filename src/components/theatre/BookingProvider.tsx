@@ -2,10 +2,12 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   ReactNode,
 } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -18,10 +20,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
 import { toast } from '@/hooks/use-toast';
-import { Show, shows, seatCategories } from '@/data/theatre';
+import { seatCategories } from '@/data/theatre';
+import { useCatalog, LiveShow } from '@/hooks/useCatalog';
+import { createBooking, confirmPayment, BookingResult } from '@/lib/api';
 import HallMap, { buildHall, seatPrice } from './HallMap';
 
-type BookingCtx = { open: (show?: Show) => void };
+type BookingCtx = { open: (show?: LiveShow) => void };
 
 const Ctx = createContext<BookingCtx>({ open: () => undefined });
 
@@ -30,22 +34,49 @@ export const useBooking = () => useContext(Ctx);
 const emptyForm = { name: '', email: '', phone: '' };
 
 const BookingProvider = ({ children }: { children: ReactNode }) => {
+  const { sessions, occupied } = useCatalog();
+  const queryClient = useQueryClient();
+
   const [isOpen, setOpen] = useState(false);
-  const [show, setShow] = useState<Show>(shows[0]);
+  const [show, setShow] = useState<LiveShow>(sessions[0]);
   const [selected, setSelected] = useState<string[]>([]);
   const [step, setStep] = useState<'seats' | 'form' | 'done'>('seats');
   const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<BookingResult | null>(null);
 
-  const seed = useMemo(() => shows.findIndex((s) => s.id === show.id) + 1, [show]);
-  const seats = useMemo(() => buildHall(seed), [seed]);
+  const current = sessions.find((s) => s.id === show?.id) ?? sessions[0];
+  const seed = useMemo(
+    () => Math.max(1, sessions.findIndex((s) => s.id === current?.id) + 1),
+    [sessions, current],
+  );
+  const taken = current?.sessionId ? occupied[current.sessionId] ?? [] : [];
+  const seats = useMemo(() => buildHall(seed, taken), [seed, taken.join(',')]);
 
-  const openDialog = useCallback((next?: Show) => {
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = localStorage.getItem('helios-pending-order');
+    if (params.get('paid') === '1' && code) {
+      localStorage.removeItem('helios-pending-order');
+      confirmPayment(code).then(() => {
+        queryClient.invalidateQueries({ queryKey: ['catalog'] });
+        toast({
+          title: 'Оплата прошла',
+          description: `Электронный билет по заказу ${code} отправлен на почту.`,
+        });
+      });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [queryClient]);
+
+  const openDialog = useCallback((next?: LiveShow) => {
     if (next) setShow(next);
     setSelected([]);
     setStep('seats');
     setForm(emptyForm);
     setErrors({});
+    setResult(null);
     setOpen(true);
   }, []);
 
@@ -56,11 +87,11 @@ const BookingProvider = ({ children }: { children: ReactNode }) => {
 
   const picked = seats.filter((s) => selected.includes(s.id));
   const total = picked.reduce(
-    (sum, s) => sum + seatPrice(show.priceFrom, s.category),
+    (sum, s) => sum + seatPrice(current?.priceFrom ?? 800, s.category),
     0,
   );
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const next: Record<string, string> = {};
     if (form.name.trim().length < 2) next.name = 'Укажите имя';
@@ -69,12 +100,53 @@ const BookingProvider = ({ children }: { children: ReactNode }) => {
     if (form.phone.replace(/\D/g, '').length < 10) next.phone = 'Проверьте телефон';
     setErrors(next);
     if (Object.keys(next).length) return;
-    setStep('done');
-    toast({
-      title: 'Места забронированы',
-      description: `«${show.title}», ${show.dateLabel}. Билеты придут на ${form.email}.`,
-    });
+
+    if (!current?.sessionId) {
+      toast({
+        title: 'Сеанс недоступен',
+        description: 'Обновите страницу и попробуйте ещё раз.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSending(true);
+    try {
+      const data = await createBooking({
+        sessionId: current.sessionId,
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        seats: picked.map((s) => ({
+          id: s.id,
+          row: s.row,
+          num: s.num,
+          price: seatPrice(current.priceFrom, s.category),
+        })),
+        total,
+        returnUrl: `${window.location.origin}/?paid=1`,
+      });
+      setResult(data);
+      setStep('done');
+      if (data.paymentUrl) localStorage.setItem('helios-pending-order', data.code);
+      queryClient.invalidateQueries({ queryKey: ['catalog'] });
+      if (data.paymentUrl) window.open(data.paymentUrl, '_blank', 'noopener');
+      toast({
+        title: data.paymentUrl ? 'Заказ создан' : 'Места забронированы',
+        description: `Заказ ${data.code}. Билет отправлен на ${form.email}.`,
+      });
+    } catch (err) {
+      toast({
+        title: 'Не получилось оформить',
+        description: err instanceof Error ? err.message : 'Попробуйте ещё раз',
+        variant: 'destructive',
+      });
+    } finally {
+      setSending(false);
+    }
   };
+
+  if (!current) return <>{children}</>;
 
   return (
     <Ctx.Provider value={{ open: openDialog }}>
@@ -83,10 +155,10 @@ const BookingProvider = ({ children }: { children: ReactNode }) => {
         <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto rounded-3xl border-border bg-card">
           <DialogHeader>
             <DialogTitle className="font-head text-2xl tracking-tightest">
-              {show.title}
+              {current.title}
             </DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              {show.dateLabel} · {show.scene}
+              {current.dateLabel} · {current.scene}
             </DialogDescription>
           </DialogHeader>
 
@@ -110,7 +182,7 @@ const BookingProvider = ({ children }: { children: ReactNode }) => {
                         {seatCategories[cat].label}
                       </span>
                       <span className="font-head font-bold">
-                        {seatPrice(show.priceFrom, cat).toLocaleString('ru-RU')} ₽
+                        {seatPrice(current.priceFrom, cat).toLocaleString('ru-RU')} ₽
                       </span>
                     </div>
                   ))}
@@ -121,9 +193,7 @@ const BookingProvider = ({ children }: { children: ReactNode }) => {
                 <div>
                   <p className="text-sm text-muted-foreground">
                     {picked.length
-                      ? picked
-                          .map((s) => `ряд ${s.row}, м. ${s.num}`)
-                          .join(' · ')
+                      ? picked.map((s) => `ряд ${s.row}, м. ${s.num}`).join(' · ')
                       : 'Выберите места на схеме'}
                   </p>
                   <p className="font-head text-xl font-bold">
@@ -201,29 +271,57 @@ const BookingProvider = ({ children }: { children: ReactNode }) => {
                 >
                   <Icon name="ChevronLeft" size={16} /> К схеме зала
                 </Button>
-                <Button type="submit" className="rounded-full px-7 font-bold">
-                  Оплатить {total.toLocaleString('ru-RU')} ₽
+                <Button
+                  type="submit"
+                  disabled={sending}
+                  className="rounded-full px-7 font-bold"
+                >
+                  {sending
+                    ? 'Оформляем…'
+                    : `Оплатить ${total.toLocaleString('ru-RU')} ₽`}
                 </Button>
               </div>
             </form>
           )}
 
-          {step === 'done' && (
+          {step === 'done' && result && (
             <div className="space-y-4 py-4 text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground">
                 <Icon name="Check" size={28} />
               </div>
-              <p className="font-head text-xl font-bold">Бронь подтверждена</p>
-              <p className="text-sm text-muted-foreground">
-                Электронные билеты на «{show.title}» отправлены на {form.email}.
-                Оплатить можно онлайн по ссылке из письма или в кассе за час до начала.
+              <p className="font-head text-xl font-bold">
+                Заказ {result.code} оформлен
               </p>
-              <Button
-                className="rounded-full px-7 font-bold"
-                onClick={() => setOpen(false)}
-              >
-                Готово
-              </Button>
+              {result.qrUrl && (
+                <img
+                  src={result.qrUrl}
+                  alt="QR-код электронного билета"
+                  className="mx-auto h-40 w-40 rounded-xl bg-white p-2"
+                />
+              )}
+              <p className="text-sm text-muted-foreground">
+                Электронный билет на «{current.title}» отправлен на {form.email}.
+                Покажите QR-код на входе.
+              </p>
+              {result.paymentUrl && (
+                <a
+                  href={result.paymentUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block rounded-full bg-primary px-7 py-3 font-bold text-primary-foreground"
+                >
+                  Оплатить {total.toLocaleString('ru-RU')} ₽ картой
+                </a>
+              )}
+              <div>
+                <Button
+                  variant="ghost"
+                  className="rounded-full"
+                  onClick={() => setOpen(false)}
+                >
+                  Закрыть
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>

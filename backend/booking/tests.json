@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "name": "Пустая бронь отклоняется",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "create"},
+      "expectedStatus": 400,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Неизвестный заказ не найден",
+      "method": "GET",
+      "path": "/?code=HL-000000",
+      "expectedStatus": 404,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

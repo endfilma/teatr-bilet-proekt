@@ -1,11 +1,13 @@
 import Header from './Header';
 import ShowWindow from './ShowWindow';
-import { shows } from '@/data/theatre';
+import { useCatalog } from '@/hooks/useCatalog';
 import { useBooking } from './BookingProvider';
 
 const Hero = () => {
   const { open } = useBooking();
-  const nearest = shows.slice(0, 3);
+  const { sessions } = useCatalog();
+  const nearest = sessions.slice(0, 3);
+  const free = nearest.reduce((sum, s) => sum + s.free, 0);
 
   return (
     <section
@@ -25,13 +27,13 @@ const Hero = () => {
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <button
-              onClick={() => open(shows[0])}
+              onClick={() => open(nearest[0])}
               className="rounded-full bg-bright px-6 py-3 text-[0.98em] font-bold text-bright-foreground transition-opacity hover:opacity-90"
             >
               Выбрать места
             </button>
             <div className="rounded-xl border border-primary/35 bg-primary/15 px-4 py-2.5 text-[0.9em] font-semibold tracking-[0.01em] text-primary">
-              Свободно 214 из 420
+              Свободно {free} мест
             </div>
           </div>
         </div>

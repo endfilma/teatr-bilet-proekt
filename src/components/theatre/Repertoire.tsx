@@ -1,12 +1,12 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Icon from '@/components/ui/icon';
 import Section from './Section';
-import { shows, Show } from '@/data/theatre';
+import { useCatalog, LiveShow } from '@/hooks/useCatalog';
 import { useBooking } from './BookingProvider';
 
 const genres = ['Все', 'Драма', 'Комедия', 'Классика', 'Детям'] as const;
 
-const Card = ({ show }: { show: Show }) => {
+const Card = ({ show }: { show: LiveShow }) => {
   const { open } = useBooking();
   return (
     <article className="flex flex-col rounded-2xl bg-card p-5 transition-colors hover:bg-secondary/70">
@@ -42,11 +42,14 @@ const Card = ({ show }: { show: Show }) => {
   );
 };
 
-const Repertoire = () => (
+const Repertoire = () => {
+  const { repertoire } = useCatalog();
+
+  return (
   <Section
     id="repertuar"
     eyebrow="Репертуар"
-    title="Двадцать три спектакля в постоянной афише"
+    title="Спектакли в постоянной афише"
     lede="Классика, современная драма и музыкальные сказки для детей. Каждый спектакль идёт не реже одного раза в месяц."
   >
     <Tabs defaultValue="Все">
@@ -63,7 +66,7 @@ const Repertoire = () => (
       </TabsList>
 
       {genres.map((g) => {
-        const list = shows.filter((s) => g === 'Все' || s.genre === g);
+        const list = repertoire.filter((s) => g === 'Все' || s.genre === g);
         return (
           <TabsContent key={g} value={g} className="mt-0">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -76,6 +79,7 @@ const Repertoire = () => (
       })}
     </Tabs>
   </Section>
-);
+  );
+};
 
 export default Repertoire;

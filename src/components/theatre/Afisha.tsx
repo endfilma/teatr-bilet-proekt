@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 import Section from './Section';
-import { shows } from '@/data/theatre';
+import { useCatalog } from '@/hooks/useCatalog';
 import { useBooking } from './BookingProvider';
 
 const scenes = ['Все сцены', 'Большая сцена', 'Малая сцена'] as const;
@@ -9,14 +9,15 @@ const scenes = ['Все сцены', 'Большая сцена', 'Малая с
 const Afisha = () => {
   const [scene, setScene] = useState<(typeof scenes)[number]>('Все сцены');
   const { open } = useBooking();
+  const { sessions } = useCatalog();
 
-  const list = shows.filter((s) => scene === 'Все сцены' || s.scene === scene);
+  const list = sessions.filter((s) => scene === 'Все сцены' || s.scene === scene);
 
   return (
     <Section
       id="afisha"
       eyebrow="Афиша и расписание"
-      title="Сентябрь на двух сценах"
+      title="Ближайшие спектакли на двух сценах"
       lede="Полное расписание сеансов: дата, время, сцена и количество свободных мест. Билеты продаются до начала спектакля."
       aside={
         <div className="flex flex-wrap gap-2">

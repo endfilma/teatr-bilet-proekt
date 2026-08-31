@@ -24,18 +24,20 @@ const SECTIONS: SectionDef[] = [
 const isSold = (seed: number, row: number, num: number) =>
   (seed * 7 + row * 13 + num * 29) % 11 < 3;
 
-export const buildHall = (seed: number): Seat[] => {
+export const buildHall = (seed: number, taken: string[] = []): Seat[] => {
+  const takenSet = new Set(taken);
   const seats: Seat[] = [];
   let rowOffset = 0;
   SECTIONS.forEach((section) => {
     for (let r = 1; r <= section.rows; r += 1) {
       for (let n = 1; n <= section.perRow; n += 1) {
+        const id = `${section.category}-${r}-${n}`;
         seats.push({
-          id: `${section.category}-${r}-${n}`,
+          id,
           row: rowOffset + r,
           num: n,
           category: section.category,
-          sold: isSold(seed, rowOffset + r, n),
+          sold: takenSet.has(id) || isSold(seed, rowOffset + r, n),
         });
       }
     }

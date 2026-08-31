@@ -1,3 +1,4 @@
+import CatalogProvider from '@/hooks/useCatalog';
 import BookingProvider from '@/components/theatre/BookingProvider';
 import Hero from '@/components/theatre/Hero';
 import Afisha from '@/components/theatre/Afisha';
@@ -9,20 +10,22 @@ import Contacts from '@/components/theatre/Contacts';
 import Footer from '@/components/theatre/Footer';
 
 const Index = () => (
-  <BookingProvider>
-    <div className="min-h-screen bg-page p-3.5">
-      <Hero />
-      <div className="mt-6 rounded-[26px] bg-background">
-        <Afisha />
-        <Repertoire />
-        <Tickets />
-        <Troupe />
-        <News />
-        <Contacts />
+  <CatalogProvider>
+    <BookingProvider>
+      <div className="min-h-screen bg-page p-3.5">
+        <Hero />
+        <div className="mt-6 rounded-[26px] bg-background">
+          <Afisha />
+          <Repertoire />
+          <Tickets />
+          <Troupe />
+          <News />
+          <Contacts />
+        </div>
+        <Footer />
       </div>
-      <Footer />
-    </div>
-  </BookingProvider>
+    </BookingProvider>
+  </CatalogProvider>
 );
 
 export default Index;
