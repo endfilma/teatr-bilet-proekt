@@ -1,33 +1,31 @@
 import { useMemo, useState } from 'react';
 import Icon from '@/components/ui/icon';
 import Section from './Section';
-import HallMap, {
-  buildHall,
-  seatPrice,
-  hallSizeOf,
-  hallCapacity,
-} from './HallMap';
-import { seatCategories } from '@/data/theatre';
+import HallMap, { buildSeats, seatPrice, hallLayoutCapacity } from './HallMap';
 import { useCatalog } from '@/hooks/useCatalog';
 import { useBooking } from './BookingProvider';
 
+const emptyLayout = { blocks: [] };
+
 const Tickets = () => {
-  const { sessions, occupied } = useCatalog();
+  const { sessions, occupied, halls } = useCatalog();
   const [showId, setShowId] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const { open } = useBooking();
 
   const show = sessions.find((s) => s.id === showId) ?? sessions[0];
-  const hallSize = hallSizeOf(show?.scene ?? 'Большая сцена');
+  const hall = halls.find((h) => h.id === show?.hallId);
+  const layout = hall?.layout ?? emptyLayout;
   const taken = show?.sessionId ? occupied[show.sessionId] ?? [] : [];
   const seats = useMemo(
-    () => buildHall(hallSize, taken),
-    [hallSize, taken.join(',')],
+    () => buildSeats(layout, taken),
+    [layout, taken.join(',')],
   );
+  const blockOptions = layout.blocks;
 
   const picked = seats.filter((s) => selected.includes(s.id));
   const total = picked.reduce(
-    (sum, s) => sum + seatPrice(show.priceFrom, s.category),
+    (sum, s) => sum + seatPrice(show?.priceFrom ?? 800, s.priceMultiplier),
     0,
   );
 
@@ -36,12 +34,14 @@ const Tickets = () => {
       prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
     );
 
+  if (!show) return null;
+
   return (
     <Section
       id="bilety"
       eyebrow="Билеты и схема зала"
       title="Выберите места прямо на схеме"
-      lede="Два камерных зала: большой на 100 мест и малый на 50. Цена зависит от ряда, бронь держится 30 минут."
+      lede="У каждого спектакля своя схема зала и вместимость. Бронь мест держится 30 минут."
       aside={
         <div className="flex flex-wrap gap-2">
           {sessions.slice(0, 4).map((s) => (
@@ -67,34 +67,33 @@ const Tickets = () => {
     >
       <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
         <div className="rounded-2xl bg-card p-4 sm:p-5">
-          <HallMap
-            seats={seats}
-            selected={selected}
-            onToggle={toggle}
-            size={hallSize}
-          />
+          <HallMap layout={layout} seats={seats} selected={selected} onToggle={toggle} />
         </div>
 
         <div className="flex flex-col gap-4">
           <div className="rounded-2xl bg-card p-5">
             <p className="text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Цены по категориям
+              Цены по зонам
             </p>
             <div className="mt-3 space-y-2">
-              {(Object.keys(seatCategories) as (keyof typeof seatCategories)[]).map(
-                (cat) => (
-                  <div
-                    key={cat}
-                    className="flex items-center justify-between rounded-xl bg-secondary/60 px-4 py-3"
-                  >
-                    <span className="text-sm text-muted-foreground">
-                      {seatCategories[cat].label}
-                    </span>
-                    <span className="font-head font-bold">
-                      {seatPrice(show.priceFrom, cat).toLocaleString('ru-RU')} ₽
-                    </span>
-                  </div>
-                ),
+              {blockOptions.map((b) => (
+                <div
+                  key={b.id}
+                  className="flex items-center justify-between rounded-xl bg-secondary/60 px-4 py-3"
+                >
+                  <span className="text-sm text-muted-foreground">{b.label}</span>
+                  <span className="font-head font-bold">
+                    {seatPrice(show.priceFrom, b.priceMultiplier).toLocaleString(
+                      'ru-RU',
+                    )}{' '}
+                    ₽
+                  </span>
+                </div>
+              ))}
+              {blockOptions.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Схема зала для этого спектакля ещё не настроена
+                </p>
               )}
             </div>
           </div>
@@ -107,7 +106,7 @@ const Tickets = () => {
               {show.title}
             </p>
             <p className="text-sm text-muted-foreground">
-              {show.dateLabel} · {hallCapacity(hallSize)} мест
+              {show.dateLabel} · {hallLayoutCapacity(layout)} мест
             </p>
 
             <div className="mt-4 flex-1 space-y-2">
@@ -122,10 +121,13 @@ const Tickets = () => {
                   className="flex items-center justify-between rounded-xl bg-secondary/60 px-4 py-2.5 text-sm"
                 >
                   <span>
-                    {seatCategories[s.category].label}, ряд {s.row}, м. {s.num}
+                    {s.blockLabel}, ряд {s.row}, м. {s.num}
                   </span>
                   <span className="flex items-center gap-3 font-head font-bold">
-                    {seatPrice(show.priceFrom, s.category).toLocaleString('ru-RU')} ₽
+                    {seatPrice(show.priceFrom, s.priceMultiplier).toLocaleString(
+                      'ru-RU',
+                    )}{' '}
+                    ₽
                     <button
                       onClick={() => toggle(s.id)}
                       aria-label="Убрать место"
@@ -151,7 +153,7 @@ const Tickets = () => {
                 onClick={() => open(show)}
                 className="mt-4 w-full rounded-full bg-primary py-3.5 font-bold text-primary-foreground transition-opacity hover:opacity-90"
               >
-                Оформить и оплатить
+                {show.buyLabel === 'Пожертвовать' ? 'Пожертвовать и оформить' : 'Оформить и оплатить'}
               </button>
               <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                 <Icon name="ShieldCheck" size={14} />

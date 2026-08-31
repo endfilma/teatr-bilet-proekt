@@ -20,10 +20,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
 import { toast } from '@/hooks/use-toast';
-import { seatCategories } from '@/data/theatre';
 import { useCatalog, LiveShow } from '@/hooks/useCatalog';
 import { createBooking, confirmPayment, BookingResult } from '@/lib/api';
-import HallMap, { buildHall, seatPrice, hallSizeOf, hallCapacity } from './HallMap';
+import HallMap, { buildSeats, seatPrice, hallLayoutCapacity } from './HallMap';
 
 type BookingCtx = { open: (show?: LiveShow) => void };
 
@@ -32,9 +31,10 @@ const Ctx = createContext<BookingCtx>({ open: () => undefined });
 export const useBooking = () => useContext(Ctx);
 
 const emptyForm = { name: '', email: '', phone: '' };
+const emptyLayout = { blocks: [] };
 
 const BookingProvider = ({ children }: { children: ReactNode }) => {
-  const { sessions, occupied } = useCatalog();
+  const { sessions, occupied, halls } = useCatalog();
   const queryClient = useQueryClient();
 
   const [isOpen, setOpen] = useState(false);
@@ -47,12 +47,14 @@ const BookingProvider = ({ children }: { children: ReactNode }) => {
   const [result, setResult] = useState<BookingResult | null>(null);
 
   const current = sessions.find((s) => s.id === show?.id) ?? sessions[0];
-  const hallSize = hallSizeOf(current?.scene ?? 'Большая сцена');
+  const hall = halls.find((h) => h.id === current?.hallId);
+  const layout = hall?.layout ?? emptyLayout;
   const taken = current?.sessionId ? occupied[current.sessionId] ?? [] : [];
   const seats = useMemo(
-    () => buildHall(hallSize, taken),
-    [hallSize, taken.join(',')],
+    () => buildSeats(layout, taken),
+    [layout, taken.join(',')],
   );
+  const isDonation = current?.buyLabel === 'Пожертвовать';
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -87,7 +89,7 @@ const BookingProvider = ({ children }: { children: ReactNode }) => {
 
   const picked = seats.filter((s) => selected.includes(s.id));
   const total = picked.reduce(
-    (sum, s) => sum + seatPrice(current?.priceFrom ?? 800, s.category),
+    (sum, s) => sum + seatPrice(current?.priceFrom ?? 800, s.priceMultiplier),
     0,
   );
 
@@ -121,7 +123,7 @@ const BookingProvider = ({ children }: { children: ReactNode }) => {
           id: s.id,
           row: s.row,
           num: s.num,
-          price: seatPrice(current.priceFrom, s.category),
+          price: seatPrice(current.priceFrom, s.priceMultiplier),
         })),
         total,
         returnUrl: `${window.location.origin}/?paid=1`,
@@ -158,36 +160,30 @@ const BookingProvider = ({ children }: { children: ReactNode }) => {
               {current.title}
             </DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              {current.dateLabel} · {current.scene} · {hallCapacity(hallSize)} мест
+              {current.dateLabel} · {current.scene} · {hallLayoutCapacity(layout)} мест
             </DialogDescription>
           </DialogHeader>
 
           {step === 'seats' && (
             <div className="space-y-4">
-              <HallMap
-                seats={seats}
-                selected={selected}
-                onToggle={toggle}
-                size={hallSize}
-              />
+              <HallMap layout={layout} seats={seats} selected={selected} onToggle={toggle} />
 
               <div className="rounded-2xl bg-secondary/60 p-4">
                 <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                  Цены по категориям
+                  Цены по зонам
                 </p>
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  {(
-                    Object.keys(seatCategories) as (keyof typeof seatCategories)[]
-                  ).map((cat) => (
+                  {layout.blocks.map((b) => (
                     <div
-                      key={cat}
+                      key={b.id}
                       className="flex items-center justify-between rounded-xl bg-background px-3 py-2 text-sm"
                     >
-                      <span className="text-muted-foreground">
-                        {seatCategories[cat].label}
-                      </span>
+                      <span className="text-muted-foreground">{b.label}</span>
                       <span className="font-head font-bold">
-                        {seatPrice(current.priceFrom, cat).toLocaleString('ru-RU')} ₽
+                        {seatPrice(current.priceFrom, b.priceMultiplier).toLocaleString(
+                          'ru-RU',
+                        )}{' '}
+                        ₽
                       </span>
                     </div>
                   ))}
@@ -283,7 +279,7 @@ const BookingProvider = ({ children }: { children: ReactNode }) => {
                 >
                   {sending
                     ? 'Оформляем…'
-                    : `Оплатить ${total.toLocaleString('ru-RU')} ₽`}
+                    : `${isDonation ? 'Пожертвовать' : 'Оплатить'} ${total.toLocaleString('ru-RU')} ₽`}
                 </Button>
               </div>
             </form>
@@ -315,7 +311,7 @@ const BookingProvider = ({ children }: { children: ReactNode }) => {
                   rel="noopener noreferrer"
                   className="inline-block rounded-full bg-primary px-7 py-3 font-bold text-primary-foreground"
                 >
-                  Оплатить {total.toLocaleString('ru-RU')} ₽ картой
+                  {isDonation ? 'Пожертвовать' : 'Оплатить'} {total.toLocaleString('ru-RU')} ₽ картой
                 </a>
               )}
               <div>

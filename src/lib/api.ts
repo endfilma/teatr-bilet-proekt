@@ -5,6 +5,30 @@ export const BOOKING_URL =
 export const ADMIN_AUTH_URL =
   'https://functions.poehali.dev/d7e0c715-c970-4af1-b9b7-e41088428d54';
 
+export type HallBlockPosition = 'left' | 'right' | 'front';
+
+export type HallBlock = {
+  id: string;
+  label: string;
+  position: HallBlockPosition;
+  priceMultiplier: number;
+  rows: number;
+  seatsPerRow: number;
+  aisleAfter: number[];
+  rowGapAfter: number[];
+};
+
+export type HallLayout = { blocks: HallBlock[] };
+
+export type ApiHall = {
+  id: number;
+  name: string;
+  isActive: boolean;
+  layout: HallLayout;
+  totalSeats: number;
+  sortOrder: number;
+};
+
 export type ApiSession = {
   id: string;
   showId: number;
@@ -20,6 +44,8 @@ export type ApiSession = {
   dateLabel: string;
   startsAt: string;
   hallCaption: string;
+  hallId: number | null;
+  buyLabel: string;
   priceFrom: number;
   free: number;
 };
@@ -36,6 +62,8 @@ export type ApiShow = {
   priceFrom: number;
   isActive: boolean;
   sortOrder: number;
+  hallId: number | null;
+  buyLabel: string;
 };
 
 export type ApiSection = {
@@ -48,6 +76,7 @@ export type ApiSection = {
 
 export type Catalog = {
   sections: ApiSection[];
+  halls: ApiHall[];
   shows: ApiShow[];
   sessions: ApiSession[];
   occupied: Record<string, string[]>;

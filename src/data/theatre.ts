@@ -194,17 +194,3 @@ export const news = [
   },
 ];
 
-export type SeatCategory = 'parter' | 'amfi';
-
-export const seatCategories: Record<
-  SeatCategory,
-  { label: string; multiplier: number }
-> = {
-  parter: { label: 'Партер', multiplier: 1.4 },
-  amfi: { label: 'Задние ряды', multiplier: 1 },
-};
-
-export const HALLS = {
-  'Большая сцена': { seats: 100, label: 'Большой зал' },
-  'Малая сцена': { seats: 50, label: 'Малый зал' },
-} as const;

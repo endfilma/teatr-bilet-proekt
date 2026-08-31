@@ -49,14 +49,46 @@ def response(status: int, payload: dict) -> dict:
     }
 
 
+def clean_blocks(raw) -> list:
+    blocks = []
+    for i, b in enumerate(raw or []):
+        blocks.append({
+            'id': str(b.get('id') or f'block-{i + 1}'),
+            'label': str(b.get('label') or 'Партер').strip() or 'Партер',
+            'position': b.get('position') if b.get('position') in ('left', 'right', 'front') else 'front',
+            'priceMultiplier': round(float(b.get('priceMultiplier') or 1), 2),
+            'rows': max(0, int(b.get('rows') or 0)),
+            'seatsPerRow': max(0, int(b.get('seatsPerRow') or 0)),
+            'aisleAfter': sorted({int(x) for x in (b.get('aisleAfter') or []) if str(x).strip() != ''}),
+            'rowGapAfter': sorted({int(x) for x in (b.get('rowGapAfter') or []) if str(x).strip() != ''}),
+        })
+    return blocks
+
+
+def hall_capacity(blocks: list) -> int:
+    return sum(b['rows'] * b['seatsPerRow'] for b in blocks)
+
+
 def load_catalog(cur) -> dict:
+    cur.execute("SELECT * FROM halls ORDER BY sort_order, id")
+    halls = [{
+        'id': r['id'],
+        'name': r['name'],
+        'isActive': r['is_active'],
+        'layout': r['layout'],
+        'totalSeats': r['total_seats'],
+        'sortOrder': r['sort_order'],
+    } for r in cur.fetchall()]
+
     cur.execute("SELECT * FROM shows ORDER BY sort_order, id")
     shows = [dict(r) for r in cur.fetchall()]
 
     cur.execute(
         "SELECT s.*, sh.slug, sh.title, sh.scene, sh.genre, sh.meta, "
-        "sh.annotation, sh.director, sh.price_from AS show_price "
+        "sh.annotation, sh.director, sh.price_from AS show_price, sh.hall_id, "
+        "sh.buy_label, h.total_seats AS hall_total_seats, h.name AS hall_name "
         "FROM sessions s JOIN shows sh ON sh.id = s.show_id "
+        "LEFT JOIN halls h ON h.id = sh.hall_id "
         "WHERE s.is_active = TRUE AND sh.is_active = TRUE "
         "ORDER BY s.starts_at"
     )
@@ -73,12 +105,13 @@ def load_catalog(cur) -> dict:
     sessions = []
     for r in rows:
         starts = r['starts_at']
+        capacity = r['hall_total_seats'] or 100
         sessions.append({
             'id': str(r['id']),
             'showId': r['show_id'],
             'slug': r['slug'],
             'title': r['title'],
-            'scene': r['scene'],
+            'scene': r['hall_name'] or r['scene'],
             'genre': r['genre'],
             'meta': r['meta'],
             'annotation': r['annotation'],
@@ -88,9 +121,10 @@ def load_catalog(cur) -> dict:
             'dateLabel': date_label(starts),
             'startsAt': starts.isoformat(),
             'hallCaption': r['hall_caption'],
+            'hallId': r['hall_id'],
+            'buyLabel': r['buy_label'] or 'Купить',
             'priceFrom': r['price_from'] or r['show_price'],
-            'free': max(0, (50 if r['scene'] == 'Малая сцена' else 100)
-                        - len(occupied.get(str(r['id']), []))),
+            'free': max(0, capacity - len(occupied.get(str(r['id']), []))),
         })
 
     cur.execute("SELECT * FROM site_sections ORDER BY sort_order, id")
@@ -104,6 +138,7 @@ def load_catalog(cur) -> dict:
 
     return {
         'sections': sections,
+        'halls': halls,
         'shows': [{
             'id': s['id'],
             'slug': s['slug'],
@@ -116,6 +151,8 @@ def load_catalog(cur) -> dict:
             'priceFrom': s['price_from'],
             'isActive': s['is_active'],
             'sortOrder': s['sort_order'],
+            'hallId': s['hall_id'],
+            'buyLabel': s['buy_label'] or 'Купить',
         } for s in shows],
         'sessions': sessions,
         'occupied': occupied,
@@ -123,7 +160,7 @@ def load_catalog(cur) -> dict:
 
 
 def handler(event: dict, context) -> dict:
-    """Каталог театра: афиша и спектакли для сайта, редактирование для администратора."""
+    """Каталог театра: залы, спектакли и афиша для сайта, редактирование для администратора."""
     method = event.get('httpMethod', 'GET')
     if method == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS, 'isBase64Encoded': False, 'body': ''}
@@ -143,26 +180,62 @@ def handler(event: dict, context) -> dict:
 
     with conn() as db:
         with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            if action == 'save_show':
+            if action == 'save_hall':
+                hid = body.get('id')
+                blocks = clean_blocks(body.get('blocks'))
+                capacity = hall_capacity(blocks)
+                layout_json = json.dumps({'blocks': blocks}, ensure_ascii=False)
+                name = body.get('name') or 'Новый зал'
+                is_active = bool(body.get('isActive', True))
+                sort_order = int(body.get('sortOrder') or 100)
+                if hid:
+                    cur.execute(
+                        f"UPDATE halls SET name = {esc(name)}, layout = {esc(layout_json)}::jsonb, "
+                        f"total_seats = {esc(capacity)}, is_active = {esc(is_active)}, "
+                        f"sort_order = {esc(sort_order)} WHERE id = {esc(int(hid))}"
+                    )
+                else:
+                    cur.execute(
+                        "INSERT INTO halls (name, layout, total_seats, is_active, sort_order) VALUES ("
+                        f"{esc(name)}, {esc(layout_json)}::jsonb, {esc(capacity)}, {esc(is_active)}, {esc(sort_order)})"
+                    )
+            elif action == 'toggle_hall':
+                cur.execute(
+                    f"UPDATE halls SET is_active = {esc(bool(body.get('isActive', True)))} "
+                    f"WHERE id = {esc(int(body['id']))}"
+                )
+            elif action == 'save_show':
                 sid = body.get('id')
                 slug = body.get('slug') or f"show-{int(datetime.now().timestamp())}"
+                hall_id = body.get('hallId')
+                scene_val = None
+                if hall_id:
+                    cur.execute(f"SELECT name FROM halls WHERE id = {esc(int(hall_id))}")
+                    hrow = cur.fetchone()
+                    scene_val = hrow['name'] if hrow else None
+                scene_val = scene_val or body.get('scene') or 'Большая сцена'
+                buy_label = str(body.get('buyLabel') or 'Купить').strip() or 'Купить'
                 fields = (
-                    f"title={esc(body.get('title', ''))}, scene={esc(body.get('scene', 'Большая сцена'))}, "
+                    f"title={esc(body.get('title', ''))}, scene={esc(scene_val)}, "
                     f"genre={esc(body.get('genre', 'Драма'))}, meta={esc(body.get('meta', ''))}, "
                     f"annotation={esc(body.get('annotation', ''))}, director={esc(body.get('director', ''))}, "
                     f"price_from={esc(int(body.get('priceFrom') or 800))}, "
                     f"is_active={esc(bool(body.get('isActive', True)))}, "
-                    f"sort_order={esc(int(body.get('sortOrder') or 100))}"
+                    f"sort_order={esc(int(body.get('sortOrder') or 100))}, "
+                    f"hall_id={esc(int(hall_id)) if hall_id else 'NULL'}, "
+                    f"buy_label={esc(buy_label)}"
                 )
                 if sid:
                     cur.execute(f"UPDATE shows SET {fields} WHERE id = {esc(int(sid))}")
                 else:
                     cur.execute(
-                        "INSERT INTO shows (slug, title, scene, genre, meta, annotation, director, price_from, is_active, sort_order) "
-                        f"VALUES ({esc(slug)}, {esc(body.get('title', ''))}, {esc(body.get('scene', 'Большая сцена'))}, "
+                        "INSERT INTO shows (slug, title, scene, genre, meta, annotation, director, price_from, "
+                        "is_active, sort_order, hall_id, buy_label) "
+                        f"VALUES ({esc(slug)}, {esc(body.get('title', ''))}, {esc(scene_val)}, "
                         f"{esc(body.get('genre', 'Драма'))}, {esc(body.get('meta', ''))}, {esc(body.get('annotation', ''))}, "
                         f"{esc(body.get('director', ''))}, {esc(int(body.get('priceFrom') or 800))}, "
-                        f"{esc(bool(body.get('isActive', True)))}, {esc(int(body.get('sortOrder') or 100))})"
+                        f"{esc(bool(body.get('isActive', True)))}, {esc(int(body.get('sortOrder') or 100))}, "
+                        f"{esc(int(hall_id)) if hall_id else 'NULL'}, {esc(buy_label)})"
                     )
             elif action == 'archive_show':
                 cur.execute(f"UPDATE shows SET is_active = FALSE WHERE id = {esc(int(body['id']))}")

@@ -14,10 +14,15 @@ import {
   ApiShow,
   ApiSession,
   ApiSection,
+  ApiHall,
+  HallBlock,
   Catalog,
 } from '@/lib/api';
+import HallEditor from './admin/HallEditor';
 
 const TOKEN_KEY = 'helios-admin-token';
+
+const buyLabelOptions = ['Купить', 'Пожертвовать'] as const;
 
 const emptyShow = {
   id: 0,
@@ -31,6 +36,8 @@ const emptyShow = {
   priceFrom: 800,
   isActive: true,
   sortOrder: 100,
+  hallId: 0 as number | null,
+  buyLabel: 'Купить',
 };
 
 const emptySession = {
@@ -49,12 +56,15 @@ const Admin = () => {
   const [showForm, setShowForm] = useState({ ...emptyShow });
   const [sessionForm, setSessionForm] = useState({ ...emptySession });
   const [orders, setOrders] = useState<Record<string, unknown>[]>([]);
+  const [editingHall, setEditingHall] = useState<ApiHall | null | 'new'>(null);
 
   const load = async () => {
     const data = await fetchCatalog();
     setCatalog(data);
     if (!sessionForm.showId && data.shows[0])
       setSessionForm((f) => ({ ...f, showId: data.shows[0].id }));
+    if (!showForm.hallId && data.halls[0])
+      setShowForm((f) => ({ ...f, hallId: data.halls[0].id }));
   };
 
   useEffect(() => {
@@ -133,6 +143,18 @@ const Admin = () => {
   const shows: ApiShow[] = catalog?.shows ?? [];
   const sessions: ApiSession[] = catalog?.sessions ?? [];
   const sections: ApiSection[] = catalog?.sections ?? [];
+  const halls: ApiHall[] = catalog?.halls ?? [];
+
+  const saveHall = (payload: {
+    id: number | null;
+    name: string;
+    isActive: boolean;
+    sortOrder: number;
+    blocks: HallBlock[];
+  }) =>
+    run({ action: 'save_hall', ...payload }, 'Зал сохранён').then(() =>
+      setEditingHall(null),
+    );
 
   return (
     <div className="min-h-screen bg-page p-3.5">
@@ -173,6 +195,7 @@ const Admin = () => {
             {[
               ['shows', 'Спектакли'],
               ['sessions', 'Даты сеансов'],
+              ['halls', 'Залы'],
               ['sections', 'Разделы сайта'],
               ['orders', 'Заказы'],
             ].map(([v, l]) => (
@@ -204,7 +227,7 @@ const Admin = () => {
                       )}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {s.scene} · {s.genre} · от {s.priceFrom} ₽
+                      {s.scene} · {s.genre} · от {s.priceFrom} ₽ · кнопка «{s.buyLabel}»
                     </p>
                   </div>
                   <button
@@ -238,16 +261,35 @@ const Admin = () => {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Зал</Label>
+                <Label>Зал (своя схема мест для этого спектакля)</Label>
                 <select
-                  value={showForm.scene}
+                  value={showForm.hallId ?? ''}
                   onChange={(e) =>
-                    setShowForm({ ...showForm, scene: e.target.value })
+                    setShowForm({ ...showForm, hallId: Number(e.target.value) })
                   }
                   className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                 >
-                  <option value="Большая сцена">Большой зал — 100 мест</option>
-                  <option value="Малая сцена">Малый зал — 50 мест</option>
+                  {halls.map((h) => (
+                    <option key={h.id} value={h.id} disabled={!h.isActive}>
+                      {h.name} — {h.totalSeats} мест{!h.isActive ? ' (выключен)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Надпись на кнопке</Label>
+                <select
+                  value={showForm.buyLabel}
+                  onChange={(e) =>
+                    setShowForm({ ...showForm, buyLabel: e.target.value })
+                  }
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  {buyLabelOptions.map((l) => (
+                    <option key={l} value={l}>
+                      {l}
+                    </option>
+                  ))}
                 </select>
               </div>
               {[
@@ -451,6 +493,78 @@ const Admin = () => {
                 </Button>
               </div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="halls" className="mt-0 max-w-2xl space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Выключенный зал нельзя выбрать для нового спектакля. Схему зала —
+              ряды, места, проходы и расположение блоков — можно настроить под
+              каждый зал отдельно.
+            </p>
+
+            {editingHall === null && (
+              <>
+                {halls.map((h) => (
+                  <div
+                    key={h.id}
+                    className="flex flex-wrap items-center gap-3 rounded-2xl bg-card p-4"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-head text-lg font-bold tracking-tightest">
+                        {h.name}{' '}
+                        {!h.isActive && (
+                          <span className="text-sm font-normal text-muted-foreground">
+                            (выключен)
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {h.totalSeats} мест · {h.layout.blocks.length} блоков
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setEditingHall(h)}
+                      className="rounded-full bg-foreground/10 px-4 py-2 text-sm font-semibold"
+                    >
+                      Изменить
+                    </button>
+                    <button
+                      onClick={() =>
+                        run(
+                          { action: 'toggle_hall', id: h.id, isActive: !h.isActive },
+                          h.isActive ? 'Зал выключен' : 'Зал включён',
+                        )
+                      }
+                      className={[
+                        'flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold',
+                        h.isActive
+                          ? 'bg-foreground/10 text-muted-foreground'
+                          : 'bg-primary text-primary-foreground',
+                      ].join(' ')}
+                    >
+                      <Icon name={h.isActive ? 'EyeOff' : 'Eye'} size={16} />
+                      {h.isActive ? 'Выключить' : 'Включить'}
+                    </button>
+                  </div>
+                ))}
+                <Button
+                  variant="ghost"
+                  className="rounded-full"
+                  onClick={() => setEditingHall('new')}
+                >
+                  <Icon name="Plus" size={16} /> Добавить зал
+                </Button>
+              </>
+            )}
+
+            {editingHall !== null && (
+              <HallEditor
+                hall={editingHall === 'new' ? null : editingHall}
+                loading={loading}
+                onSave={saveHall}
+                onCancel={() => setEditingHall(null)}
+              />
+            )}
           </TabsContent>
 
           <TabsContent value="sections" className="mt-0 max-w-2xl space-y-3">

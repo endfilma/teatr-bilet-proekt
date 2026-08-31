@@ -1,15 +1,20 @@
 import { createContext, useContext, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { fetchCatalog, ApiSession, ApiSection } from '@/lib/api';
+import { fetchCatalog, ApiSession, ApiSection, ApiHall } from '@/lib/api';
 import { Show, shows as fallbackShows } from '@/data/theatre';
 
-export type LiveShow = Show & { sessionId: string | null };
+export type LiveShow = Show & {
+  sessionId: string | null;
+  hallId: number | null;
+  buyLabel: string;
+};
 
 type CatalogValue = {
   sessions: LiveShow[];
   repertoire: LiveShow[];
   occupied: Record<string, string[]>;
   sections: ApiSection[];
+  halls: ApiHall[];
   isVisible: (key: string) => boolean;
   isLoading: boolean;
 };
@@ -26,6 +31,8 @@ const defaultSections: ApiSection[] = [
 const toShow = (s: ApiSession): LiveShow => ({
   id: `${s.slug}-${s.id}`,
   sessionId: s.id,
+  hallId: s.hallId,
+  buyLabel: s.buyLabel || 'Купить',
   title: s.title,
   scene: s.scene as Show['scene'],
   genre: s.genre as Show['genre'],
@@ -40,13 +47,19 @@ const toShow = (s: ApiSession): LiveShow => ({
   director: s.director,
 });
 
-const fallback: LiveShow[] = fallbackShows.map((s) => ({ ...s, sessionId: null }));
+const fallback: LiveShow[] = fallbackShows.map((s) => ({
+  ...s,
+  sessionId: null,
+  hallId: null,
+  buyLabel: 'Купить',
+}));
 
 const Ctx = createContext<CatalogValue>({
   sessions: fallback,
   repertoire: fallback,
   occupied: {},
   sections: defaultSections,
+  halls: [],
   isVisible: () => true,
   isLoading: false,
 });
@@ -81,6 +94,7 @@ export const CatalogProvider = ({ children }: { children: ReactNode }) => {
         repertoire,
         occupied: data?.occupied ?? {},
         sections,
+        halls: data?.halls ?? [],
         isVisible,
         isLoading,
       }}

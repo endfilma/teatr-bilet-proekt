@@ -1,74 +1,131 @@
-import { SeatCategory, seatCategories } from '@/data/theatre';
+import { HallBlock, HallLayout } from '@/lib/api';
 
 export type Seat = {
   id: string;
+  blockId: string;
+  blockLabel: string;
   row: number;
   num: number;
-  category: SeatCategory;
+  priceMultiplier: number;
   sold: boolean;
 };
 
-type SectionDef = {
-  category: SeatCategory;
-  rows: number;
-  perRow: number;
-};
+export const seatId = (blockId: string, row: number, num: number) =>
+  `${blockId}-${row}-${num}`;
 
-export type HallSize = 'big' | 'small';
+export const hallLayoutCapacity = (layout: HallLayout) =>
+  layout.blocks.reduce((sum, b) => sum + b.rows * b.seatsPerRow, 0);
 
-/** Большой зал — 100 мест, малый — 50. */
-export const HALL_LAYOUTS: Record<HallSize, SectionDef[]> = {
-  big: [
-    { category: 'parter', rows: 6, perRow: 10 },
-    { category: 'amfi', rows: 4, perRow: 10 },
-  ],
-  small: [
-    { category: 'parter', rows: 4, perRow: 8 },
-    { category: 'amfi', rows: 2, perRow: 9 },
-  ],
-};
-
-export const hallSizeOf = (scene: string): HallSize =>
-  scene === 'Малая сцена' ? 'small' : 'big';
-
-export const hallCapacity = (size: HallSize) =>
-  HALL_LAYOUTS[size].reduce((sum, s) => sum + s.rows * s.perRow, 0);
-
-export const buildHall = (size: HallSize, taken: string[] = []): Seat[] => {
+export const buildSeats = (layout: HallLayout, taken: string[] = []): Seat[] => {
   const takenSet = new Set(taken);
   const seats: Seat[] = [];
-  let rowOffset = 0;
-  HALL_LAYOUTS[size].forEach((section) => {
-    for (let r = 1; r <= section.rows; r += 1) {
-      for (let n = 1; n <= section.perRow; n += 1) {
-        const id = `${section.category}-${rowOffset + r}-${n}`;
+  layout.blocks.forEach((block) => {
+    for (let r = 1; r <= block.rows; r += 1) {
+      for (let n = 1; n <= block.seatsPerRow; n += 1) {
+        const id = seatId(block.id, r, n);
         seats.push({
           id,
-          row: rowOffset + r,
+          blockId: block.id,
+          blockLabel: block.label,
+          row: r,
           num: n,
-          category: section.category,
+          priceMultiplier: block.priceMultiplier,
           sold: takenSet.has(id),
         });
       }
     }
-    rowOffset += section.rows;
   });
   return seats;
 };
 
-export const seatPrice = (base: number, category: SeatCategory) =>
-  Math.round((base * seatCategories[category].multiplier) / 50) * 50;
+export const seatPrice = (base: number, multiplier: number) =>
+  Math.round((base * multiplier) / 50) * 50;
 
-type Props = {
+const seatButton = (
+  seat: Seat,
+  picked: boolean,
+  onToggle: (id: string) => void,
+) => (
+  <button
+    key={seat.id}
+    type="button"
+    disabled={seat.sold}
+    onClick={() => onToggle(seat.id)}
+    aria-label={`${seat.blockLabel}, ряд ${seat.row}, место ${seat.num}`}
+    title={`${seat.blockLabel}, ряд ${seat.row}, место ${seat.num}`}
+    className={[
+      'h-6 w-7 shrink-0 rounded-md text-[0.55rem] font-semibold transition-transform sm:h-7 sm:w-8',
+      seat.sold
+        ? 'cursor-not-allowed bg-seat-sold text-transparent'
+        : picked
+          ? 'bg-primary text-primary-foreground'
+          : 'bg-seat-free text-background/70 hover:scale-110 hover:bg-primary/60',
+    ].join(' ')}
+  >
+    {seat.num}
+  </button>
+);
+
+const BlockView = ({
+  block,
+  seats,
+  selected,
+  onToggle,
+}: {
+  block: HallBlock;
   seats: Seat[];
   selected: string[];
   onToggle: (id: string) => void;
-  size?: HallSize;
+}) => {
+  const rowGap = new Set(block.rowGapAfter);
+  const aisle = new Set(block.aisleAfter);
+
+  return (
+    <div className="flex min-w-max flex-col items-center gap-1.5">
+      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+        {block.label}
+      </p>
+      <div className="flex flex-col gap-1.5">
+        {Array.from({ length: block.rows }, (_, i) => i + 1).map((rowNum) => (
+          <div key={rowNum} className="flex flex-col items-center">
+            <div className="flex items-center gap-1.5">
+              <span className="w-4 text-right text-[0.6rem] text-muted-foreground">
+                {rowNum}
+              </span>
+              {Array.from({ length: block.seatsPerRow }, (_, i) => i + 1).map(
+                (num) => {
+                  const seat = seats.find(
+                    (s) => s.blockId === block.id && s.row === rowNum && s.num === num,
+                  );
+                  if (!seat) return null;
+                  return (
+                    <span key={seat.id} className="flex items-center gap-1.5">
+                      {seatButton(seat, selected.includes(seat.id), onToggle)}
+                      {aisle.has(num) && <span className="w-3" />}
+                    </span>
+                  );
+                },
+              )}
+            </div>
+            {rowGap.has(rowNum) && <div className="h-2.5" />}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 };
 
-const HallMap = ({ seats, selected, onToggle, size = 'big' }: Props) => {
-  let rowOffset = 0;
-  const sections = HALL_LAYOUTS[size];
+type Props = {
+  layout: HallLayout;
+  seats: Seat[];
+  selected: string[];
+  onToggle: (id: string) => void;
+};
+
+const HallMap = ({ layout, seats, selected, onToggle }: Props) => {
+  const left = layout.blocks.filter((b) => b.position === 'left');
+  const right = layout.blocks.filter((b) => b.position === 'right');
+  const front = layout.blocks.filter((b) => b.position === 'front');
 
   return (
     <div className="rounded-2xl bg-secondary/60 p-4 sm:p-6">
@@ -77,56 +134,43 @@ const HallMap = ({ seats, selected, onToggle, size = 'big' }: Props) => {
         Сцена
       </p>
 
-      <div className="flex flex-col gap-5 overflow-x-auto">
-        {sections.map((section) => {
-          const start = rowOffset;
-          rowOffset += section.rows;
-          const sectionSeats = seats.filter((s) => s.category === section.category);
-
-          return (
-            <div key={section.category} className="min-w-max">
-              <p className="mb-2 text-center text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                {seatCategories[section.category].label}
-              </p>
-              <div className="flex flex-col items-center gap-1.5">
-                {Array.from({ length: section.rows }, (_, i) => start + i + 1).map(
-                  (rowNum) => (
-                    <div key={rowNum} className="flex items-center gap-1.5">
-                      <span className="w-4 text-right text-[0.62rem] text-muted-foreground">
-                        {rowNum}
-                      </span>
-                      {sectionSeats
-                        .filter((s) => s.row === rowNum)
-                        .map((seat) => {
-                          const picked = selected.includes(seat.id);
-                          return (
-                            <button
-                              key={seat.id}
-                              type="button"
-                              disabled={seat.sold}
-                              onClick={() => onToggle(seat.id)}
-                              aria-label={`Ряд ${seat.row}, место ${seat.num}`}
-                              title={`Ряд ${seat.row}, место ${seat.num}`}
-                              className={[
-                                'h-6 w-7 rounded-md text-[0.55rem] font-semibold transition-transform sm:h-7 sm:w-8',
-                                seat.sold
-                                  ? 'cursor-not-allowed bg-seat-sold text-transparent'
-                                  : picked
-                                    ? 'bg-primary text-primary-foreground'
-                                    : 'bg-seat-free text-background/70 hover:scale-110 hover:bg-primary/60',
-                              ].join(' ')}
-                            >
-                              {seat.num}
-                            </button>
-                          );
-                        })}
-                    </div>
-                  ),
-                )}
-              </div>
-            </div>
-          );
-        })}
+      <div className="flex flex-col items-center gap-6 overflow-x-auto">
+        {(left.length > 0 || right.length > 0) && (
+          <div className="flex items-start justify-center gap-8">
+            {left.map((b) => (
+              <BlockView
+                key={b.id}
+                block={b}
+                seats={seats}
+                selected={selected}
+                onToggle={onToggle}
+              />
+            ))}
+            {right.map((b) => (
+              <BlockView
+                key={b.id}
+                block={b}
+                seats={seats}
+                selected={selected}
+                onToggle={onToggle}
+              />
+            ))}
+          </div>
+        )}
+        {front.map((b) => (
+          <BlockView
+            key={b.id}
+            block={b}
+            seats={seats}
+            selected={selected}
+            onToggle={onToggle}
+          />
+        ))}
+        {layout.blocks.length === 0 && (
+          <p className="py-6 text-sm text-muted-foreground">
+            Схема зала ещё не настроена
+          </p>
+        )}
       </div>
 
       <div className="mt-5 flex flex-wrap justify-center gap-4 text-[0.72rem] text-muted-foreground">

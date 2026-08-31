@@ -52,7 +52,7 @@ const ShowWindow = ({ show, index }: Props) => {
             onClick={() => open(show)}
             className="rounded-full bg-primary px-5 py-2.5 text-[0.9em] font-bold text-primary-foreground transition-opacity hover:opacity-90"
           >
-            Купить
+            {show.buyLabel}
           </button>
         </div>
       </div>
