@@ -23,7 +23,7 @@ import { toast } from '@/hooks/use-toast';
 import { seatCategories } from '@/data/theatre';
 import { useCatalog, LiveShow } from '@/hooks/useCatalog';
 import { createBooking, confirmPayment, BookingResult } from '@/lib/api';
-import HallMap, { buildHall, seatPrice } from './HallMap';
+import HallMap, { buildHall, seatPrice, hallSizeOf, hallCapacity } from './HallMap';
 
 type BookingCtx = { open: (show?: LiveShow) => void };
 
@@ -47,12 +47,12 @@ const BookingProvider = ({ children }: { children: ReactNode }) => {
   const [result, setResult] = useState<BookingResult | null>(null);
 
   const current = sessions.find((s) => s.id === show?.id) ?? sessions[0];
-  const seed = useMemo(
-    () => Math.max(1, sessions.findIndex((s) => s.id === current?.id) + 1),
-    [sessions, current],
-  );
+  const hallSize = hallSizeOf(current?.scene ?? 'Большая сцена');
   const taken = current?.sessionId ? occupied[current.sessionId] ?? [] : [];
-  const seats = useMemo(() => buildHall(seed, taken), [seed, taken.join(',')]);
+  const seats = useMemo(
+    () => buildHall(hallSize, taken),
+    [hallSize, taken.join(',')],
+  );
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -158,19 +158,24 @@ const BookingProvider = ({ children }: { children: ReactNode }) => {
               {current.title}
             </DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              {current.dateLabel} · {current.scene}
+              {current.dateLabel} · {current.scene} · {hallCapacity(hallSize)} мест
             </DialogDescription>
           </DialogHeader>
 
           {step === 'seats' && (
             <div className="space-y-4">
-              <HallMap seats={seats} selected={selected} onToggle={toggle} />
+              <HallMap
+                seats={seats}
+                selected={selected}
+                onToggle={toggle}
+                size={hallSize}
+              />
 
               <div className="rounded-2xl bg-secondary/60 p-4">
                 <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
                   Цены по категориям
                 </p>
-                <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   {(
                     Object.keys(seatCategories) as (keyof typeof seatCategories)[]
                   ).map((cat) => (

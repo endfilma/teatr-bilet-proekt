@@ -1,4 +1,5 @@
-import { ADDRESS, LOGO, PHONE } from '@/data/theatre';
+import Icon from '@/components/ui/icon';
+import { ADDRESS, LOGO, PHONE, VK_URL, TG_URL } from '@/data/theatre';
 import { navLinks } from './nav';
 
 const Footer = () => (
@@ -12,9 +13,29 @@ const Footer = () => (
           </span>
         </div>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          Краснодарский театр «Гелиос». Драма, комедия и спектакли для детей на двух
-          сценах с 1987 года.
+          Краснодарский театр «Гелиос». Драма, комедия и спектакли для детей в двух
+          камерных залах на 100 и 50 мест.
         </p>
+        <div className="mt-4 flex gap-2">
+          <a
+            href={VK_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="ВКонтакте"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-foreground/10 text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
+          >
+            <Icon name="Users" size={18} />
+          </a>
+          <a
+            href={TG_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Telegram"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-foreground/10 text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
+          >
+            <Icon name="Send" size={18} />
+          </a>
+        </div>
       </div>
 
       <nav className="grid gap-2 sm:grid-cols-2 lg:ml-auto">

@@ -14,30 +14,40 @@ type SectionDef = {
   perRow: number;
 };
 
-const SECTIONS: SectionDef[] = [
-  { category: 'parter', rows: 5, perRow: 14 },
-  { category: 'amfi', rows: 3, perRow: 16 },
-  { category: 'balcony', rows: 2, perRow: 18 },
-];
+export type HallSize = 'big' | 'small';
 
-/** Детерминированный «занято/свободно», чтобы схема не прыгала при ре-рендере. */
-const isSold = (seed: number, row: number, num: number) =>
-  (seed * 7 + row * 13 + num * 29) % 11 < 3;
+/** Большой зал — 100 мест, малый — 50. */
+export const HALL_LAYOUTS: Record<HallSize, SectionDef[]> = {
+  big: [
+    { category: 'parter', rows: 6, perRow: 10 },
+    { category: 'amfi', rows: 4, perRow: 10 },
+  ],
+  small: [
+    { category: 'parter', rows: 4, perRow: 8 },
+    { category: 'amfi', rows: 2, perRow: 9 },
+  ],
+};
 
-export const buildHall = (seed: number, taken: string[] = []): Seat[] => {
+export const hallSizeOf = (scene: string): HallSize =>
+  scene === 'Малая сцена' ? 'small' : 'big';
+
+export const hallCapacity = (size: HallSize) =>
+  HALL_LAYOUTS[size].reduce((sum, s) => sum + s.rows * s.perRow, 0);
+
+export const buildHall = (size: HallSize, taken: string[] = []): Seat[] => {
   const takenSet = new Set(taken);
   const seats: Seat[] = [];
   let rowOffset = 0;
-  SECTIONS.forEach((section) => {
+  HALL_LAYOUTS[size].forEach((section) => {
     for (let r = 1; r <= section.rows; r += 1) {
       for (let n = 1; n <= section.perRow; n += 1) {
-        const id = `${section.category}-${r}-${n}`;
+        const id = `${section.category}-${rowOffset + r}-${n}`;
         seats.push({
           id,
           row: rowOffset + r,
           num: n,
           category: section.category,
-          sold: takenSet.has(id) || isSold(seed, rowOffset + r, n),
+          sold: takenSet.has(id),
         });
       }
     }
@@ -53,10 +63,12 @@ type Props = {
   seats: Seat[];
   selected: string[];
   onToggle: (id: string) => void;
+  size?: HallSize;
 };
 
-const HallMap = ({ seats, selected, onToggle }: Props) => {
+const HallMap = ({ seats, selected, onToggle, size = 'big' }: Props) => {
   let rowOffset = 0;
+  const sections = HALL_LAYOUTS[size];
 
   return (
     <div className="rounded-2xl bg-secondary/60 p-4 sm:p-6">
@@ -66,7 +78,7 @@ const HallMap = ({ seats, selected, onToggle }: Props) => {
       </p>
 
       <div className="flex flex-col gap-5 overflow-x-auto">
-        {SECTIONS.map((section) => {
+        {sections.map((section) => {
           const start = rowOffset;
           rowOffset += section.rows;
           const sectionSeats = seats.filter((s) => s.category === section.category);
@@ -96,14 +108,16 @@ const HallMap = ({ seats, selected, onToggle }: Props) => {
                               aria-label={`Ряд ${seat.row}, место ${seat.num}`}
                               title={`Ряд ${seat.row}, место ${seat.num}`}
                               className={[
-                                'h-4 w-[18px] rounded transition-transform sm:h-[18px] sm:w-[22px]',
+                                'h-6 w-7 rounded-md text-[0.55rem] font-semibold transition-transform sm:h-7 sm:w-8',
                                 seat.sold
-                                  ? 'cursor-not-allowed bg-seat-sold'
+                                  ? 'cursor-not-allowed bg-seat-sold text-transparent'
                                   : picked
-                                    ? 'bg-primary'
-                                    : 'bg-seat-free hover:scale-110 hover:bg-primary/60',
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'bg-seat-free text-background/70 hover:scale-110 hover:bg-primary/60',
                               ].join(' ')}
-                            />
+                            >
+                              {seat.num}
+                            </button>
                           );
                         })}
                     </div>

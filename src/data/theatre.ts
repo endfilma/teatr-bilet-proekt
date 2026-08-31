@@ -2,7 +2,9 @@ export const LOGO =
   'https://cdn.poehali.dev/projects/c8e834e9-e2e4-4d86-a9ea-f5317860cdd9/bucket/4dc7ca48-3bb9-40f1-9aaa-b578ee45659b.png';
 
 export const PHONE = '+7 861 200-40-60';
-export const ADDRESS = 'Краснодар, ул. Красная, 118';
+export const ADDRESS = 'Краснодар, ул. Чапаева, 85/1';
+export const VK_URL = 'https://vk.ru/gelios_theatre';
+export const TG_URL = 'https://t.me/gelios_theatre';
 
 export type Show = {
   id: string;
@@ -31,7 +33,7 @@ export const shows: Show[] = [
     time: '19:00',
     dateLabel: '12 сентября · 19:00',
     hallCaption: 'Партер',
-    free: 96,
+    free: 84,
     priceFrom: 800,
     annotation:
       'Пьеса Островского в прочтении, где город Калинов становится тесной комнатой без окон. Спектакль идёт с одним антрактом.',
@@ -46,11 +48,11 @@ export const shows: Show[] = [
     date: '14 сентября',
     time: '18:30',
     dateLabel: '14 сентября · 18:30',
-    hallCaption: 'Амфитеатр',
-    free: 41,
+    hallCaption: 'Задние ряды',
+    free: 38,
     priceFrom: 1200,
     annotation:
-      'Бунинская новелла на двоих: актёр, свет и пароходный гудок. Играется без антракта, зал на 120 мест.',
+      'Бунинская новелла на двоих: актёр, свет и пароходный гудок. Играется без антракта в малом зале на 50 мест.',
     director: 'Реж. Ирина Соловьёва',
   },
   {
@@ -62,8 +64,8 @@ export const shows: Show[] = [
     date: '19 сентября',
     time: '12:00',
     dateLabel: '19 сентября · 12:00',
-    hallCaption: 'Партер и балкон',
-    free: 77,
+    hallCaption: 'Партер и задние ряды',
+    free: 71,
     priceFrom: 600,
     annotation:
       'Музыкальная сказка с живым оркестром, тремя переодеваниями и котом, который умеет разговаривать со зрителем.',
@@ -79,7 +81,7 @@ export const shows: Show[] = [
     time: '19:00',
     dateLabel: '21 сентября · 19:00',
     hallCaption: 'Партер',
-    free: 58,
+    free: 55,
     priceFrom: 900,
     annotation:
       'Гоголь без пыли: чиновники в стеклянном кабинете, а Хлестаков приезжает на самокате. Два антракта.',
@@ -94,8 +96,8 @@ export const shows: Show[] = [
     date: '27 сентября',
     time: '18:00',
     dateLabel: '27 сентября · 18:00',
-    hallCaption: 'Партер и бельэтаж',
-    free: 112,
+    hallCaption: 'Партер и задние ряды',
+    free: 92,
     priceFrom: 1000,
     annotation:
       'Чехов, сыгранный как семейный вечер, который никак не может закончиться. Премьера сезона 2025/2026.',
@@ -110,8 +112,8 @@ export const shows: Show[] = [
     date: '28 сентября',
     time: '11:00',
     dateLabel: '28 сентября · 11:00',
-    hallCaption: 'Амфитеатр',
-    free: 34,
+    hallCaption: 'Задние ряды',
+    free: 29,
     priceFrom: 700,
     annotation:
       'Сент-Экзюпери с теневым театром и песком: планеты появляются прямо на глазах у зрителей.',
@@ -160,9 +162,9 @@ export const troupe = [
 
 export const theatreFacts = [
   { value: '1987', label: 'год основания' },
-  { value: '420', label: 'мест в большом зале' },
+  { value: '100', label: 'мест в большом зале' },
+  { value: '50', label: 'мест в малом зале' },
   { value: '23', label: 'спектакля в репертуаре' },
-  { value: '112 000', label: 'зрителей за сезон' },
 ];
 
 export const news = [
@@ -192,13 +194,17 @@ export const news = [
   },
 ];
 
-export type SeatCategory = 'parter' | 'amfi' | 'balcony';
+export type SeatCategory = 'parter' | 'amfi';
 
 export const seatCategories: Record<
   SeatCategory,
   { label: string; multiplier: number }
 > = {
-  parter: { label: 'Партер', multiplier: 1.6 },
-  amfi: { label: 'Амфитеатр', multiplier: 1.1 },
-  balcony: { label: 'Балкон', multiplier: 0.8 },
+  parter: { label: 'Партер', multiplier: 1.4 },
+  amfi: { label: 'Задние ряды', multiplier: 1 },
 };
+
+export const HALLS = {
+  'Большая сцена': { seats: 100, label: 'Большой зал' },
+  'Малая сцена': { seats: 50, label: 'Малый зал' },
+} as const;

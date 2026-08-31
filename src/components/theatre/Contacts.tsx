@@ -12,16 +12,16 @@ import {
 } from '@/components/ui/accordion';
 import { toast } from '@/hooks/use-toast';
 import Section from './Section';
-import { ADDRESS, PHONE } from '@/data/theatre';
+import { ADDRESS, PHONE, VK_URL, TG_URL } from '@/data/theatre';
 
 const routes = [
   {
     q: 'На общественном транспорте',
-    a: 'Трамваи 2, 4, 5 и троллейбус 7 — остановка «Театральная площадь», далее 3 минуты пешком по улице Красной.',
+    a: 'Автобусы и маршрутки до остановки «Улица Чапаева», далее 5 минут пешком до дома 85/1.',
   },
   {
     q: 'На автомобиле',
-    a: 'Парковка на 60 мест во дворе театра со стороны улицы Гимназической, для зрителей вечерних спектаклей бесплатно.',
+    a: 'Парковка во дворе театра со стороны улицы Чапаева, для зрителей вечерних спектаклей бесплатно.',
   },
   {
     q: 'Работа кассы',
@@ -56,7 +56,7 @@ const Contacts = () => {
     <Section
       id="kontakty"
       eyebrow="Контакты и как добраться"
-      title="Ждём вас на Красной, 118"
+      title="Ждём вас на Чапаева, 85/1"
       lede="Позвоните в кассу, напишите администратору или просто приезжайте за час до спектакля — фойе открывается заранее."
     >
       <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
@@ -94,6 +94,30 @@ const Contacts = () => {
                 Ср–Вс, вечерние в 19:00
               </p>
             </div>
+            <a
+              href={VK_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-2xl bg-card p-5 transition-colors hover:bg-secondary/70"
+            >
+              <Icon name="Users" size={20} className="text-primary" />
+              <p className="mt-3 font-head font-bold">ВКонтакте</p>
+              <p className="text-sm text-muted-foreground">
+                Фото со спектаклей и анонсы
+              </p>
+            </a>
+            <a
+              href={TG_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-2xl bg-card p-5 transition-colors hover:bg-secondary/70"
+            >
+              <Icon name="Send" size={20} className="text-primary" />
+              <p className="mt-3 font-head font-bold">Telegram</p>
+              <p className="text-sm text-muted-foreground">
+                Канал театра, премьеры первыми
+              </p>
+            </a>
           </div>
 
           <div className="rounded-2xl bg-card p-5">

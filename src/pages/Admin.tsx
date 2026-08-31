@@ -36,7 +36,7 @@ const emptySession = {
   id: 0,
   showId: 0,
   startsAt: '',
-  hallCaption: 'Партер',
+  hallCaption: 'Партер и задние ряды',
   priceFrom: '',
 };
 
@@ -225,9 +225,29 @@ const Admin = () => {
               <p className="font-head text-lg font-bold tracking-tightest">
                 {showForm.id ? 'Редактирование' : 'Новый спектакль'}
               </p>
+              <div className="space-y-1.5">
+                <Label>Название</Label>
+                <Input
+                  value={showForm.title}
+                  onChange={(e) =>
+                    setShowForm({ ...showForm, title: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Зал</Label>
+                <select
+                  value={showForm.scene}
+                  onChange={(e) =>
+                    setShowForm({ ...showForm, scene: e.target.value })
+                  }
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="Большая сцена">Большой зал — 100 мест</option>
+                  <option value="Малая сцена">Малый зал — 50 мест</option>
+                </select>
+              </div>
               {[
-                ['title', 'Название'],
-                ['scene', 'Сцена'],
                 ['genre', 'Жанр (Драма, Комедия, Классика, Детям)'],
                 ['meta', 'Подпись (длительность, возраст)'],
                 ['director', 'Режиссёр'],

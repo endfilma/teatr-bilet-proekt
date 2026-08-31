@@ -89,7 +89,8 @@ def load_catalog(cur) -> dict:
             'startsAt': starts.isoformat(),
             'hallCaption': r['hall_caption'],
             'priceFrom': r['price_from'] or r['show_price'],
-            'free': max(0, 420 - len(occupied.get(str(r['id']), []))),
+            'free': max(0, (50 if r['scene'] == 'Малая сцена' else 100)
+                        - len(occupied.get(str(r['id']), []))),
         })
 
     return {

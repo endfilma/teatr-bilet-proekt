@@ -1,7 +1,12 @@
 import { useMemo, useState } from 'react';
 import Icon from '@/components/ui/icon';
 import Section from './Section';
-import HallMap, { buildHall, seatPrice } from './HallMap';
+import HallMap, {
+  buildHall,
+  seatPrice,
+  hallSizeOf,
+  hallCapacity,
+} from './HallMap';
 import { seatCategories } from '@/data/theatre';
 import { useCatalog } from '@/hooks/useCatalog';
 import { useBooking } from './BookingProvider';
@@ -13,9 +18,12 @@ const Tickets = () => {
   const { open } = useBooking();
 
   const show = sessions.find((s) => s.id === showId) ?? sessions[0];
-  const seed = Math.max(1, sessions.findIndex((s) => s.id === show?.id) + 1);
+  const hallSize = hallSizeOf(show?.scene ?? 'Большая сцена');
   const taken = show?.sessionId ? occupied[show.sessionId] ?? [] : [];
-  const seats = useMemo(() => buildHall(seed, taken), [seed, taken.join(',')]);
+  const seats = useMemo(
+    () => buildHall(hallSize, taken),
+    [hallSize, taken.join(',')],
+  );
 
   const picked = seats.filter((s) => selected.includes(s.id));
   const total = picked.reduce(
@@ -33,7 +41,7 @@ const Tickets = () => {
       id="bilety"
       eyebrow="Билеты и схема зала"
       title="Выберите места прямо на схеме"
-      lede="Большой зал на 420 мест: партер, амфитеатр и балкон. Цена зависит от категории места, бронь держится 30 минут."
+      lede="Два камерных зала: большой на 100 мест и малый на 50. Цена зависит от ряда, бронь держится 30 минут."
       aside={
         <div className="flex flex-wrap gap-2">
           {sessions.slice(0, 4).map((s) => (
@@ -59,7 +67,12 @@ const Tickets = () => {
     >
       <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
         <div className="rounded-2xl bg-card p-4 sm:p-5">
-          <HallMap seats={seats} selected={selected} onToggle={toggle} />
+          <HallMap
+            seats={seats}
+            selected={selected}
+            onToggle={toggle}
+            size={hallSize}
+          />
         </div>
 
         <div className="flex flex-col gap-4">
@@ -93,7 +106,9 @@ const Tickets = () => {
             <p className="mt-2 font-head text-lg font-bold tracking-tightest">
               {show.title}
             </p>
-            <p className="text-sm text-muted-foreground">{show.dateLabel}</p>
+            <p className="text-sm text-muted-foreground">
+              {show.dateLabel} · {hallCapacity(hallSize)} мест
+            </p>
 
             <div className="mt-4 flex-1 space-y-2">
               {picked.length === 0 && (
