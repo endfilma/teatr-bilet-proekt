@@ -93,7 +93,17 @@ def load_catalog(cur) -> dict:
                         - len(occupied.get(str(r['id']), []))),
         })
 
+    cur.execute("SELECT * FROM site_sections ORDER BY sort_order, id")
+    sections = [{
+        'key': r['key'],
+        'label': r['label'],
+        'anchor': r['anchor'],
+        'isVisible': r['is_visible'],
+        'sortOrder': r['sort_order'],
+    } for r in cur.fetchall()]
+
     return {
+        'sections': sections,
         'shows': [{
             'id': s['id'],
             'slug': s['slug'],
@@ -176,6 +186,11 @@ def handler(event: dict, context) -> dict:
                     )
             elif action == 'archive_session':
                 cur.execute(f"UPDATE sessions SET is_active = FALSE WHERE id = {esc(int(body['id']))}")
+            elif action == 'toggle_section':
+                cur.execute(
+                    f"UPDATE site_sections SET is_visible = {esc(bool(body.get('isVisible', True)))} "
+                    f"WHERE key = {esc(body.get('key', ''))}"
+                )
             elif action == 'orders':
                 cur.execute(
                     "SELECT o.code, o.customer_name, o.email, o.phone, o.total, o.status, o.created_at, "

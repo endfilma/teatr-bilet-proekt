@@ -38,7 +38,16 @@ export type ApiShow = {
   sortOrder: number;
 };
 
+export type ApiSection = {
+  key: string;
+  label: string;
+  anchor: string;
+  isVisible: boolean;
+  sortOrder: number;
+};
+
 export type Catalog = {
+  sections: ApiSection[];
   shows: ApiShow[];
   sessions: ApiSession[];
   occupied: Record<string, string[]>;

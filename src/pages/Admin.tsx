@@ -13,6 +13,7 @@ import {
   fetchCatalog,
   ApiShow,
   ApiSession,
+  ApiSection,
   Catalog,
 } from '@/lib/api';
 
@@ -131,6 +132,7 @@ const Admin = () => {
 
   const shows: ApiShow[] = catalog?.shows ?? [];
   const sessions: ApiSession[] = catalog?.sessions ?? [];
+  const sections: ApiSection[] = catalog?.sections ?? [];
 
   return (
     <div className="min-h-screen bg-page p-3.5">
@@ -171,6 +173,7 @@ const Admin = () => {
             {[
               ['shows', 'Спектакли'],
               ['sessions', 'Даты сеансов'],
+              ['sections', 'Разделы сайта'],
               ['orders', 'Заказы'],
             ].map(([v, l]) => (
               <TabsTrigger
@@ -448,6 +451,50 @@ const Admin = () => {
                 </Button>
               </div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="sections" className="mt-0 max-w-2xl space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Выключенный раздел исчезает со страницы и из меню сайта. Данные при
+              этом сохраняются — можно включить обратно в любой момент.
+            </p>
+            {sections.map((s) => (
+              <div
+                key={s.key}
+                className="flex items-center gap-4 rounded-2xl bg-card p-4"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-head text-lg font-bold tracking-tightest">
+                    {s.label}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {s.isVisible ? 'Показывается на сайте' : 'Скрыт от посетителей'}
+                  </p>
+                </div>
+                <button
+                  onClick={() =>
+                    run(
+                      {
+                        action: 'toggle_section',
+                        key: s.key,
+                        isVisible: !s.isVisible,
+                      },
+                      s.isVisible ? `Раздел «${s.label}» скрыт` : `Раздел «${s.label}» показан`,
+                    )
+                  }
+                  disabled={loading}
+                  className={[
+                    'flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-colors',
+                    s.isVisible
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-foreground/10 text-muted-foreground',
+                  ].join(' ')}
+                >
+                  <Icon name={s.isVisible ? 'Eye' : 'EyeOff'} size={16} />
+                  {s.isVisible ? 'Включён' : 'Выключен'}
+                </button>
+              </div>
+            ))}
           </TabsContent>
 
           <TabsContent value="orders" className="mt-0 space-y-3">

@@ -1,6 +1,6 @@
 import { createContext, useContext, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { fetchCatalog, ApiSession } from '@/lib/api';
+import { fetchCatalog, ApiSession, ApiSection } from '@/lib/api';
 import { Show, shows as fallbackShows } from '@/data/theatre';
 
 export type LiveShow = Show & { sessionId: string | null };
@@ -9,8 +9,19 @@ type CatalogValue = {
   sessions: LiveShow[];
   repertoire: LiveShow[];
   occupied: Record<string, string[]>;
+  sections: ApiSection[];
+  isVisible: (key: string) => boolean;
   isLoading: boolean;
 };
+
+const defaultSections: ApiSection[] = [
+  { key: 'afisha', label: 'Афиша', anchor: 'afisha', isVisible: true, sortOrder: 10 },
+  { key: 'repertuar', label: 'Репертуар', anchor: 'repertuar', isVisible: true, sortOrder: 20 },
+  { key: 'bilety', label: 'Билеты', anchor: 'bilety', isVisible: true, sortOrder: 30 },
+  { key: 'truppa', label: 'Труппа', anchor: 'truppa', isVisible: true, sortOrder: 40 },
+  { key: 'novosti', label: 'Новости', anchor: 'novosti', isVisible: true, sortOrder: 50 },
+  { key: 'kontakty', label: 'Контакты', anchor: 'kontakty', isVisible: true, sortOrder: 60 },
+];
 
 const toShow = (s: ApiSession): LiveShow => ({
   id: `${s.slug}-${s.id}`,
@@ -35,6 +46,8 @@ const Ctx = createContext<CatalogValue>({
   sessions: fallback,
   repertoire: fallback,
   occupied: {},
+  sections: defaultSections,
+  isVisible: () => true,
   isLoading: false,
 });
 
@@ -57,9 +70,20 @@ export const CatalogProvider = ({ children }: { children: ReactNode }) => {
     return true;
   });
 
+  const sections = data?.sections?.length ? data.sections : defaultSections;
+  const isVisible = (key: string) =>
+    sections.find((s) => s.key === key)?.isVisible ?? true;
+
   return (
     <Ctx.Provider
-      value={{ sessions, repertoire, occupied: data?.occupied ?? {}, isLoading }}
+      value={{
+        sessions,
+        repertoire,
+        occupied: data?.occupied ?? {},
+        sections,
+        isVisible,
+        isLoading,
+      }}
     >
       {children}
     </Ctx.Provider>

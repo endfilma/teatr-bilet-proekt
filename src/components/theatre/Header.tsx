@@ -1,10 +1,15 @@
 import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 import { LOGO, PHONE } from '@/data/theatre';
-import { navLinks } from './nav';
+import { useCatalog } from '@/hooks/useCatalog';
 
 const Header = () => {
   const [open, setOpen] = useState(false);
+  const { sections, isVisible } = useCatalog();
+
+  const navLinks = sections
+    .filter((s) => s.isVisible)
+    .map((s) => ({ href: `#${s.anchor}`, label: s.label }));
 
   return (
     <header className="sticky top-0 z-50 -mx-1 rounded-2xl bg-background/90 px-1 py-3 backdrop-blur-md">
@@ -32,12 +37,14 @@ const Header = () => {
           <div className="flex items-center gap-2 rounded-full bg-foreground/10 px-4 py-2.5 text-[0.9em] font-semibold">
             Касса <span className="font-normal text-muted-foreground">{PHONE}</span>
           </div>
-          <a
-            href="#bilety"
-            className="flex items-center gap-2 rounded-full bg-foreground/10 px-4 py-2.5 text-[0.9em] font-semibold transition-colors hover:bg-foreground/20"
-          >
-            Мои билеты
-          </a>
+          {isVisible('bilety') && (
+            <a
+              href="#bilety"
+              className="flex items-center gap-2 rounded-full bg-foreground/10 px-4 py-2.5 text-[0.9em] font-semibold transition-colors hover:bg-foreground/20"
+            >
+              Мои билеты
+            </a>
+          )}
         </div>
 
         <button

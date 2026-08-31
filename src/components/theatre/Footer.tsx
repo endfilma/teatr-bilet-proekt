@@ -1,8 +1,14 @@
 import Icon from '@/components/ui/icon';
 import { ADDRESS, LOGO, PHONE, VK_URL, TG_URL } from '@/data/theatre';
-import { navLinks } from './nav';
+import { useCatalog } from '@/hooks/useCatalog';
 
-const Footer = () => (
+const Footer = () => {
+  const { sections } = useCatalog();
+  const navLinks = sections
+    .filter((s) => s.isVisible)
+    .map((s) => ({ href: `#${s.anchor}`, label: s.label }));
+
+  return (
   <footer className="mt-6 rounded-[26px] bg-card px-5 py-10 lg:px-[26px]">
     <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
       <div className="max-w-xs">
@@ -62,6 +68,7 @@ const Footer = () => (
       афише.
     </div>
   </footer>
-);
+  );
+};
 
 export default Footer;
