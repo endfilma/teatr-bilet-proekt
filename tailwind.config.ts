@@ -18,7 +18,23 @@ export default {
 			}
 		},
 		extend: {
+			fontFamily: {
+				head: ['Manrope', 'sans-serif'],
+				body: ['Inter', 'sans-serif'],
+			},
 			colors: {
+				frame: 'hsl(var(--frame))',
+				titlebar: 'hsl(var(--titlebar))',
+				dot: 'hsl(var(--dot))',
+				bright: {
+					DEFAULT: 'hsl(var(--bright))',
+					foreground: 'hsl(var(--bright-foreground))'
+				},
+				seat: {
+					free: 'hsl(var(--seat-free))',
+					sold: 'hsl(var(--seat-sold))'
+				},
+				page: 'hsl(var(--page))',
 				border: 'hsl(var(--border))',
 				input: 'hsl(var(--input))',
 				ring: 'hsl(var(--ring))',
@@ -84,11 +100,16 @@ export default {
 					to: {
 						height: '0'
 					}
+				},
+				rise: {
+					from: { opacity: '0', transform: 'translateY(14px)' },
+					to: { opacity: '1', transform: 'none' }
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
-				'accordion-up': 'accordion-up 0.2s ease-out'
+				'accordion-up': 'accordion-up 0.2s ease-out',
+				rise: 'rise .7s cubic-bezier(.22,.9,.28,1) both'
 			}
 		}
 	},
