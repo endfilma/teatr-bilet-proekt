@@ -1,61 +1,35 @@
 import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import Icon from '@/components/ui/icon';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
 import { LOGO } from '@/data/theatre';
 import {
   adminLogin,
   adminPost,
   fetchCatalog,
-  ApiShow,
-  ApiSession,
-  ApiSection,
   ApiHall,
   HallBlock,
   BookingSettings,
   Catalog,
 } from '@/lib/api';
-import HallEditor from './admin/HallEditor';
+import AdminLogin from './admin/AdminLogin';
+import ShowsSessionsTab, {
+  emptyShow,
+  emptySession,
+  ShowForm,
+  SessionForm,
+} from './admin/ShowsSessionsTab';
+import HallsTab from './admin/HallsTab';
+import SiteSettingsTab from './admin/SiteSettingsTab';
 
 const TOKEN_KEY = 'helios-admin-token';
-
-const buyLabelOptions = ['Купить', 'Пожертвовать'] as const;
-
-const emptyShow = {
-  id: 0,
-  slug: '',
-  title: '',
-  scene: 'Большая сцена',
-  genre: 'Драма',
-  meta: '',
-  annotation: '',
-  director: '',
-  priceFrom: 800,
-  isActive: true,
-  sortOrder: 100,
-  hallId: 0 as number | null,
-  buyLabel: 'Купить',
-};
-
-const emptySession = {
-  id: 0,
-  showId: 0,
-  startsAt: '',
-  hallCaption: 'Партер и задние ряды',
-  priceFrom: '',
-};
 
 const Admin = () => {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [catalog, setCatalog] = useState<Catalog | null>(null);
-  const [showForm, setShowForm] = useState({ ...emptyShow });
-  const [sessionForm, setSessionForm] = useState({ ...emptySession });
+  const [showForm, setShowForm] = useState<ShowForm>({ ...emptyShow });
+  const [sessionForm, setSessionForm] = useState<SessionForm>({ ...emptySession });
   const [orders, setOrders] = useState<Record<string, unknown>[]>([]);
   const [editingHall, setEditingHall] = useState<ApiHall | null | 'new'>(null);
   const [bookingForm, setBookingForm] = useState<BookingSettings>({
@@ -117,40 +91,19 @@ const Admin = () => {
 
   if (!token) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-page p-4">
-        <form
-          onSubmit={login}
-          className="w-full max-w-sm space-y-4 rounded-3xl bg-background p-8"
-        >
-          <img src={LOGO} alt="Гелиос" className="h-12" />
-          <h1 className="font-head text-2xl font-extrabold tracking-tightest">
-            Управление театром
-          </h1>
-          <div className="space-y-2">
-            <Label htmlFor="pwd">Пароль администратора</Label>
-            <Input
-              id="pwd"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-          <Button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-full font-bold"
-          >
-            Войти
-          </Button>
-        </form>
-      </div>
+      <AdminLogin
+        password={password}
+        setPassword={setPassword}
+        loading={loading}
+        onSubmit={login}
+      />
     );
   }
 
-  const shows: ApiShow[] = catalog?.shows ?? [];
-  const sessions: ApiSession[] = catalog?.sessions ?? [];
-  const sections: ApiSection[] = catalog?.sections ?? [];
-  const halls: ApiHall[] = catalog?.halls ?? [];
+  const shows = catalog?.shows ?? [];
+  const sessions = catalog?.sessions ?? [];
+  const sections = catalog?.sections ?? [];
+  const halls = catalog?.halls ?? [];
 
   const saveHall = (payload: {
     id: number | null;
@@ -218,542 +171,36 @@ const Admin = () => {
             ))}
           </TabsList>
 
-          <TabsContent value="shows" className="mt-0 grid gap-4 lg:grid-cols-[1fr_360px]">
-            <div className="space-y-3">
-              {shows.map((s) => (
-                <div
-                  key={s.id}
-                  className="flex flex-wrap items-center gap-3 rounded-2xl bg-card p-4"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="font-head text-lg font-bold tracking-tightest">
-                      {s.title}{' '}
-                      {!s.isActive && (
-                        <span className="text-sm font-normal text-muted-foreground">
-                          (скрыт)
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {s.scene} · {s.genre} · от {s.priceFrom} ₽ · кнопка «{s.buyLabel}»
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setShowForm({ ...s })}
-                    className="rounded-full bg-foreground/10 px-4 py-2 text-sm font-semibold"
-                  >
-                    Изменить
-                  </button>
-                  <button
-                    onClick={() => run({ action: 'archive_show', id: s.id }, 'Спектакль скрыт')}
-                    className="rounded-full bg-foreground/10 px-3 py-2 text-muted-foreground"
-                    aria-label="Скрыть"
-                  >
-                    <Icon name="EyeOff" size={16} />
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `Удалить спектакль «${s.title}» безвозвратно? Все его сеансы и заказы тоже удалятся.`,
-                        )
-                      )
-                        run({ action: 'delete_show', id: s.id }, 'Спектакль удалён');
-                    }}
-                    className="rounded-full bg-destructive/10 px-3 py-2 text-destructive"
-                    aria-label="Удалить"
-                  >
-                    <Icon name="Trash2" size={16} />
-                  </button>
-                </div>
-              ))}
-            </div>
+          <ShowsSessionsTab
+            shows={shows}
+            sessions={sessions}
+            halls={halls}
+            showForm={showForm}
+            setShowForm={setShowForm}
+            sessionForm={sessionForm}
+            setSessionForm={setSessionForm}
+            loading={loading}
+            run={run}
+          />
 
-            <div className="space-y-3 rounded-2xl bg-card p-5">
-              <p className="font-head text-lg font-bold tracking-tightest">
-                {showForm.id ? 'Редактирование' : 'Новый спектакль'}
-              </p>
-              <div className="space-y-1.5">
-                <Label>Название</Label>
-                <Input
-                  value={showForm.title}
-                  onChange={(e) =>
-                    setShowForm({ ...showForm, title: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Зал (своя схема мест для этого спектакля)</Label>
-                <select
-                  value={showForm.hallId ?? ''}
-                  onChange={(e) =>
-                    setShowForm({ ...showForm, hallId: Number(e.target.value) })
-                  }
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  {halls.map((h) => (
-                    <option key={h.id} value={h.id} disabled={!h.isActive}>
-                      {h.name} — {h.totalSeats} мест{!h.isActive ? ' (выключен)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Надпись на кнопке</Label>
-                <select
-                  value={showForm.buyLabel}
-                  onChange={(e) =>
-                    setShowForm({ ...showForm, buyLabel: e.target.value })
-                  }
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  {buyLabelOptions.map((l) => (
-                    <option key={l} value={l}>
-                      {l}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {[
-                ['genre', 'Жанр (Драма, Комедия, Классика, Детям)'],
-                ['meta', 'Подпись (длительность, возраст)'],
-                ['director', 'Режиссёр'],
-              ].map(([key, label]) => (
-                <div key={key} className="space-y-1.5">
-                  <Label>{label}</Label>
-                  <Input
-                    value={(showForm as never)[key] ?? ''}
-                    onChange={(e) =>
-                      setShowForm({ ...showForm, [key]: e.target.value })
-                    }
-                  />
-                </div>
-              ))}
-              <div className="space-y-1.5">
-                <Label>Описание</Label>
-                <Textarea
-                  rows={4}
-                  value={showForm.annotation}
-                  onChange={(e) =>
-                    setShowForm({ ...showForm, annotation: e.target.value })
-                  }
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>Цена от, ₽</Label>
-                  <Input
-                    type="number"
-                    value={showForm.priceFrom}
-                    onChange={(e) =>
-                      setShowForm({ ...showForm, priceFrom: Number(e.target.value) })
-                    }
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Порядок</Label>
-                  <Input
-                    type="number"
-                    value={showForm.sortOrder}
-                    onChange={(e) =>
-                      setShowForm({ ...showForm, sortOrder: Number(e.target.value) })
-                    }
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2 pt-2">
-                <Button
-                  disabled={loading || !showForm.title}
-                  onClick={() =>
-                    run({ action: 'save_show', ...showForm, id: showForm.id || null }, 'Сохранено').then(
-                      () => setShowForm({ ...emptyShow }),
-                    )
-                  }
-                  className="rounded-full font-bold"
-                >
-                  Сохранить
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="rounded-full"
-                  onClick={() => setShowForm({ ...emptyShow })}
-                >
-                  Очистить
-                </Button>
-              </div>
-            </div>
-          </TabsContent>
+          <HallsTab
+            halls={halls}
+            shows={shows}
+            editingHall={editingHall}
+            setEditingHall={setEditingHall}
+            loading={loading}
+            run={run}
+            saveHall={saveHall}
+          />
 
-          <TabsContent
-            value="sessions"
-            className="mt-0 grid gap-4 lg:grid-cols-[1fr_360px]"
-          >
-            <div className="space-y-3">
-              {sessions.map((s) => (
-                <div
-                  key={s.id}
-                  className="flex flex-wrap items-center gap-3 rounded-2xl bg-card p-4"
-                >
-                  <div className="w-[130px] shrink-0">
-                    <p className="font-head font-bold">{s.date}</p>
-                    <p className="text-sm text-muted-foreground">{s.time}</p>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-head text-lg font-bold tracking-tightest">
-                      {s.title}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {s.hallCaption} · от {s.priceFrom} ₽ · свободно {s.free}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() =>
-                      setSessionForm({
-                        id: Number(s.id),
-                        showId: s.showId,
-                        startsAt: s.startsAt.slice(0, 16),
-                        hallCaption: s.hallCaption,
-                        priceFrom: String(s.priceFrom),
-                      })
-                    }
-                    className="rounded-full bg-foreground/10 px-4 py-2 text-sm font-semibold"
-                  >
-                    Изменить
-                  </button>
-                  <button
-                    onClick={() =>
-                      run({ action: 'archive_session', id: Number(s.id) }, 'Сеанс снят')
-                    }
-                    className="rounded-full bg-foreground/10 px-3 py-2 text-muted-foreground"
-                    aria-label="Снять с показа"
-                  >
-                    <Icon name="EyeOff" size={16} />
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `Удалить сеанс «${s.title}» (${s.date}, ${s.time}) безвозвратно? Связанные заказы тоже удалятся.`,
-                        )
-                      )
-                        run({ action: 'delete_session', id: Number(s.id) }, 'Сеанс удалён');
-                    }}
-                    className="rounded-full bg-destructive/10 px-3 py-2 text-destructive"
-                    aria-label="Удалить"
-                  >
-                    <Icon name="Trash2" size={16} />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="space-y-3 rounded-2xl bg-card p-5">
-              <p className="font-head text-lg font-bold tracking-tightest">
-                {sessionForm.id ? 'Редактирование сеанса' : 'Новый сеанс'}
-              </p>
-              <div className="space-y-1.5">
-                <Label>Спектакль</Label>
-                <select
-                  value={sessionForm.showId}
-                  onChange={(e) =>
-                    setSessionForm({ ...sessionForm, showId: Number(e.target.value) })
-                  }
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  {shows.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Дата и время</Label>
-                <Input
-                  type="datetime-local"
-                  value={sessionForm.startsAt}
-                  onChange={(e) =>
-                    setSessionForm({ ...sessionForm, startsAt: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Зона зала</Label>
-                <Input
-                  value={sessionForm.hallCaption}
-                  onChange={(e) =>
-                    setSessionForm({ ...sessionForm, hallCaption: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Цена от, ₽ (пусто — как у спектакля)</Label>
-                <Input
-                  type="number"
-                  value={sessionForm.priceFrom}
-                  onChange={(e) =>
-                    setSessionForm({ ...sessionForm, priceFrom: e.target.value })
-                  }
-                />
-              </div>
-              <div className="flex gap-2 pt-2">
-                <Button
-                  disabled={loading || !sessionForm.startsAt || !sessionForm.showId}
-                  onClick={() =>
-                    run(
-                      {
-                        action: 'save_session',
-                        id: sessionForm.id || null,
-                        showId: sessionForm.showId,
-                        startsAt: sessionForm.startsAt,
-                        hallCaption: sessionForm.hallCaption,
-                        priceFrom: sessionForm.priceFrom || null,
-                      },
-                      'Сеанс сохранён',
-                    ).then(() =>
-                      setSessionForm({ ...emptySession, showId: shows[0]?.id ?? 0 }),
-                    )
-                  }
-                  className="rounded-full font-bold"
-                >
-                  Сохранить
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="rounded-full"
-                  onClick={() =>
-                    setSessionForm({ ...emptySession, showId: shows[0]?.id ?? 0 })
-                  }
-                >
-                  Очистить
-                </Button>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="halls" className="mt-0 max-w-2xl space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Выключенный зал нельзя выбрать для нового спектакля. Схему зала —
-              ряды, места, проходы и расположение блоков — можно настроить под
-              каждый зал отдельно.
-            </p>
-
-            {editingHall === null && (
-              <>
-                {halls.map((h) => (
-                  <div
-                    key={h.id}
-                    className="flex flex-wrap items-center gap-3 rounded-2xl bg-card p-4"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="font-head text-lg font-bold tracking-tightest">
-                        {h.name}{' '}
-                        {!h.isActive && (
-                          <span className="text-sm font-normal text-muted-foreground">
-                            (выключен)
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {h.totalSeats} мест · {h.layout.blocks.length} блоков
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setEditingHall(h)}
-                      className="rounded-full bg-foreground/10 px-4 py-2 text-sm font-semibold"
-                    >
-                      Изменить
-                    </button>
-                    <button
-                      onClick={() =>
-                        run(
-                          { action: 'toggle_hall', id: h.id, isActive: !h.isActive },
-                          h.isActive ? 'Зал выключен' : 'Зал включён',
-                        )
-                      }
-                      className={[
-                        'flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold',
-                        h.isActive
-                          ? 'bg-foreground/10 text-muted-foreground'
-                          : 'bg-primary text-primary-foreground',
-                      ].join(' ')}
-                    >
-                      <Icon name={h.isActive ? 'EyeOff' : 'Eye'} size={16} />
-                      {h.isActive ? 'Выключить' : 'Включить'}
-                    </button>
-                    <button
-                      onClick={() => {
-                        const used = shows.filter((s) => s.hallId === h.id).length;
-                        const warn = used
-                          ? ` У ${used} спектакля(ей) сейчас выбран этот зал — у них зал сбросится.`
-                          : '';
-                        if (window.confirm(`Удалить зал «${h.name}» безвозвратно?${warn}`))
-                          run({ action: 'delete_hall', id: h.id }, 'Зал удалён');
-                      }}
-                      className="rounded-full bg-destructive/10 px-3 py-2 text-destructive"
-                      aria-label="Удалить"
-                    >
-                      <Icon name="Trash2" size={16} />
-                    </button>
-                  </div>
-                ))}
-                <Button
-                  variant="ghost"
-                  className="rounded-full"
-                  onClick={() => setEditingHall('new')}
-                >
-                  <Icon name="Plus" size={16} /> Добавить зал
-                </Button>
-              </>
-            )}
-
-            {editingHall !== null && (
-              <HallEditor
-                hall={editingHall === 'new' ? null : editingHall}
-                loading={loading}
-                onSave={saveHall}
-                onCancel={() => setEditingHall(null)}
-              />
-            )}
-          </TabsContent>
-
-          <TabsContent value="sections" className="mt-0 max-w-2xl space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Выключенный раздел исчезает со страницы и из меню сайта. Данные при
-              этом сохраняются — можно включить обратно в любой момент.
-            </p>
-            {sections.map((s) => (
-              <div
-                key={s.key}
-                className="flex items-center gap-4 rounded-2xl bg-card p-4"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="font-head text-lg font-bold tracking-tightest">
-                    {s.label}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {s.isVisible ? 'Показывается на сайте' : 'Скрыт от посетителей'}
-                  </p>
-                </div>
-                <button
-                  onClick={() =>
-                    run(
-                      {
-                        action: 'toggle_section',
-                        key: s.key,
-                        isVisible: !s.isVisible,
-                      },
-                      s.isVisible ? `Раздел «${s.label}» скрыт` : `Раздел «${s.label}» показан`,
-                    )
-                  }
-                  disabled={loading}
-                  className={[
-                    'flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-colors',
-                    s.isVisible
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-foreground/10 text-muted-foreground',
-                  ].join(' ')}
-                >
-                  <Icon name={s.isVisible ? 'Eye' : 'EyeOff'} size={16} />
-                  {s.isVisible ? 'Включён' : 'Выключен'}
-                </button>
-              </div>
-            ))}
-          </TabsContent>
-
-          <TabsContent value="booking" className="mt-0 max-w-lg space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Выберите, какие поля зритель обязан заполнить при оформлении заказа.
-              Отключённое поле останется в форме, но пропустить его можно будет
-              без ошибки.
-            </p>
-            <div className="space-y-3 rounded-2xl bg-card p-5">
-              {(
-                [
-                  ['nameRequired', 'Имя обязательно'],
-                  ['emailRequired', 'Почта обязательна'],
-                  ['phoneRequired', 'Телефон обязателен'],
-                ] as [keyof BookingSettings, string][]
-              ).map(([key, label]) => (
-                <div key={key} className="flex items-center justify-between gap-4">
-                  <p className="font-medium">{label}</p>
-                  <button
-                    onClick={() =>
-                      setBookingForm((f) => ({ ...f, [key]: !f[key] }))
-                    }
-                    className={[
-                      'flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors',
-                      bookingForm[key]
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-foreground/10 text-muted-foreground',
-                    ].join(' ')}
-                  >
-                    <Icon name={bookingForm[key] ? 'Check' : 'X'} size={16} />
-                    {bookingForm[key] ? 'Обязательно' : 'Необязательно'}
-                  </button>
-                </div>
-              ))}
-              <Button
-                disabled={loading}
-                onClick={() =>
-                  run(
-                    { action: 'save_booking_settings', ...bookingForm },
-                    'Настройки формы сохранены',
-                  )
-                }
-                className="rounded-full font-bold"
-              >
-                Сохранить
-              </Button>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="orders" className="mt-0 space-y-3">
-            {orders.length === 0 && (
-              <p className="text-muted-foreground">Заказов пока нет.</p>
-            )}
-            {orders.map((o) => (
-              <div
-                key={String(o.code)}
-                className="flex flex-wrap items-center gap-3 rounded-2xl bg-card p-4"
-              >
-                <div className="w-[120px] shrink-0 font-head font-bold">
-                  {String(o.code)}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium">
-                    {String(o.title)}{' '}
-                    {Boolean(o.is_donation) && (
-                      <span className="rounded-full bg-foreground/10 px-2 py-0.5 text-xs font-semibold text-muted-foreground">
-                        Пожертвование
-                      </span>
-                    )}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {String(o.customer_name || '—')} · {String(o.email || '—')} ·{' '}
-                    {String(o.phone || '—')}
-                  </p>
-                </div>
-                <div className="font-head font-bold">{String(o.total)} ₽</div>
-                <span
-                  className={[
-                    'rounded-full px-3 py-1 text-xs font-semibold',
-                    o.status === 'paid'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-foreground/10 text-muted-foreground',
-                  ].join(' ')}
-                >
-                  {o.status === 'paid'
-                    ? o.is_donation
-                      ? 'Получено'
-                      : 'Оплачен'
-                    : o.is_donation
-                      ? 'Ожидает пожертвования'
-                      : 'Ожидает оплаты'}
-                </span>
-              </div>
-            ))}
-          </TabsContent>
+          <SiteSettingsTab
+            sections={sections}
+            bookingForm={bookingForm}
+            setBookingForm={setBookingForm}
+            orders={orders}
+            loading={loading}
+            run={run}
+          />
         </Tabs>
       </div>
     </div>

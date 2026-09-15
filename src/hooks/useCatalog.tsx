@@ -75,13 +75,20 @@ const Ctx = createContext<CatalogValue>({
 export const useCatalog = () => useContext(Ctx);
 
 export const CatalogProvider = ({ children }: { children: ReactNode }) => {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['catalog'],
     queryFn: fetchCatalog,
     staleTime: 60_000,
   });
 
-  const sessions = data?.sessions?.length ? data.sessions.map(toShow) : fallback;
+  // Пока идёт первая загрузка — не показываем демо-заглушку (старые названия
+  // спектаклей), иначе она на миг мелькает перед реальными данными.
+  // Заглушку показываем только если запрос реально не удался.
+  const sessions = data?.sessions?.length
+    ? data.sessions.map(toShow)
+    : isError
+      ? fallback
+      : [];
 
   const seen = new Set<string>();
   const repertoire = sessions.filter((s) => {
