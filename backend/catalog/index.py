@@ -136,9 +136,18 @@ def load_catalog(cur) -> dict:
         'sortOrder': r['sort_order'],
     } for r in cur.fetchall()]
 
+    cur.execute("SELECT * FROM booking_settings WHERE id = 1")
+    bs = cur.fetchone() or {}
+    booking_settings = {
+        'nameRequired': bs.get('name_required', True),
+        'emailRequired': bs.get('email_required', True),
+        'phoneRequired': bs.get('phone_required', True),
+    }
+
     return {
         'sections': sections,
         'halls': halls,
+        'bookingSettings': booking_settings,
         'shows': [{
             'id': s['id'],
             'slug': s['slug'],
@@ -239,6 +248,37 @@ def handler(event: dict, context) -> dict:
                     )
             elif action == 'archive_show':
                 cur.execute(f"UPDATE shows SET is_active = FALSE WHERE id = {esc(int(body['id']))}")
+            elif action == 'delete_show':
+                show_id = esc(int(body['id']))
+                cur.execute(
+                    "DELETE FROM booked_seats WHERE order_id IN (SELECT o.id FROM orders o "
+                    f"JOIN sessions s ON s.id = o.session_id WHERE s.show_id = {show_id})"
+                )
+                cur.execute(
+                    "DELETE FROM orders WHERE session_id IN "
+                    f"(SELECT id FROM sessions WHERE show_id = {show_id})"
+                )
+                cur.execute(f"DELETE FROM sessions WHERE show_id = {show_id}")
+                cur.execute(f"DELETE FROM shows WHERE id = {show_id}")
+            elif action == 'delete_session':
+                session_id = esc(int(body['id']))
+                cur.execute(
+                    f"DELETE FROM booked_seats WHERE order_id IN (SELECT id FROM orders WHERE session_id = {session_id})"
+                )
+                cur.execute(f"DELETE FROM orders WHERE session_id = {session_id}")
+                cur.execute(f"DELETE FROM sessions WHERE id = {session_id}")
+            elif action == 'delete_hall':
+                hall_id = esc(int(body['id']))
+                cur.execute(f"UPDATE shows SET hall_id = NULL WHERE hall_id = {hall_id}")
+                cur.execute(f"DELETE FROM halls WHERE id = {hall_id}")
+            elif action == 'save_booking_settings':
+                cur.execute(
+                    "UPDATE booking_settings SET "
+                    f"name_required = {esc(bool(body.get('nameRequired', True)))}, "
+                    f"email_required = {esc(bool(body.get('emailRequired', True)))}, "
+                    f"phone_required = {esc(bool(body.get('phoneRequired', True)))} "
+                    "WHERE id = 1"
+                )
             elif action == 'save_session':
                 sid = body.get('id')
                 starts = str(body.get('startsAt', '')).replace('T', ' ')[:16]
@@ -267,7 +307,7 @@ def handler(event: dict, context) -> dict:
             elif action == 'orders':
                 cur.execute(
                     "SELECT o.code, o.customer_name, o.email, o.phone, o.total, o.status, o.created_at, "
-                    "o.seats, sh.title, s.starts_at FROM orders o "
+                    "o.seats, o.is_donation, sh.title, s.starts_at FROM orders o "
                     "JOIN sessions s ON s.id = o.session_id JOIN shows sh ON sh.id = s.show_id "
                     "ORDER BY o.created_at DESC LIMIT 100"
                 )

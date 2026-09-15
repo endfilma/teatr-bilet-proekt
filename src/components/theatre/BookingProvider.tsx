@@ -34,7 +34,7 @@ const emptyForm = { name: '', email: '', phone: '' };
 const emptyLayout = { blocks: [] };
 
 const BookingProvider = ({ children }: { children: ReactNode }) => {
-  const { sessions, occupied, halls } = useCatalog();
+  const { sessions, occupied, halls, bookingSettings } = useCatalog();
   const queryClient = useQueryClient();
 
   const [isOpen, setOpen] = useState(false);
@@ -96,10 +96,16 @@ const BookingProvider = ({ children }: { children: ReactNode }) => {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const next: Record<string, string> = {};
-    if (form.name.trim().length < 2) next.name = 'Укажите имя';
-    if (!/^[^@\s]+@[^@\s]+\.[a-zA-Zа-яА-Я]{2,}$/.test(form.email))
+    if (bookingSettings.nameRequired && form.name.trim().length < 2)
+      next.name = 'Укажите имя';
+    if (
+      bookingSettings.emailRequired
+        ? !/^[^@\s]+@[^@\s]+\.[a-zA-Zа-яА-Я]{2,}$/.test(form.email)
+        : form.email && !/^[^@\s]+@[^@\s]+\.[a-zA-Zа-яА-Я]{2,}$/.test(form.email)
+    )
       next.email = 'Проверьте почту';
-    if (form.phone.replace(/\D/g, '').length < 10) next.phone = 'Проверьте телефон';
+    if (bookingSettings.phoneRequired && form.phone.replace(/\D/g, '').length < 10)
+      next.phone = 'Проверьте телефон';
     setErrors(next);
     if (Object.keys(next).length) return;
 
@@ -135,7 +141,9 @@ const BookingProvider = ({ children }: { children: ReactNode }) => {
       if (data.paymentUrl) window.open(data.paymentUrl, '_blank', 'noopener');
       toast({
         title: data.paymentUrl ? 'Заказ создан' : 'Места забронированы',
-        description: `Заказ ${data.code}. Билет отправлен на ${form.email}.`,
+        description: form.email
+          ? `Заказ ${data.code}. Билет отправлен на ${form.email}.`
+          : `Заказ ${data.code}.`,
       });
     } catch (err) {
       toast({
@@ -206,7 +214,7 @@ const BookingProvider = ({ children }: { children: ReactNode }) => {
                   onClick={() => setStep('form')}
                   className="rounded-full px-7 font-bold"
                 >
-                  Перейти к оплате
+                  {isDonation ? 'Перейти к пожертвованию' : 'Перейти к оплате'}
                 </Button>
               </div>
             </div>
@@ -226,7 +234,14 @@ const BookingProvider = ({ children }: { children: ReactNode }) => {
 
               <div className="grid gap-4 sm:grid-cols-3">
                 <div className="space-y-2">
-                  <Label htmlFor="bk-name">Имя</Label>
+                  <Label htmlFor="bk-name">
+                    Имя
+                    {!bookingSettings.nameRequired && (
+                      <span className="ml-1 font-normal text-muted-foreground">
+                        (необязательно)
+                      </span>
+                    )}
+                  </Label>
                   <Input
                     id="bk-name"
                     value={form.name}
@@ -238,7 +253,14 @@ const BookingProvider = ({ children }: { children: ReactNode }) => {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="bk-email">Почта</Label>
+                  <Label htmlFor="bk-email">
+                    Почта
+                    {!bookingSettings.emailRequired && (
+                      <span className="ml-1 font-normal text-muted-foreground">
+                        (необязательно)
+                      </span>
+                    )}
+                  </Label>
                   <Input
                     id="bk-email"
                     value={form.email}
@@ -250,7 +272,14 @@ const BookingProvider = ({ children }: { children: ReactNode }) => {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="bk-phone">Телефон</Label>
+                  <Label htmlFor="bk-phone">
+                    Телефон
+                    {!bookingSettings.phoneRequired && (
+                      <span className="ml-1 font-normal text-muted-foreground">
+                        (необязательно)
+                      </span>
+                    )}
+                  </Label>
                   <Input
                     id="bk-phone"
                     value={form.phone}
@@ -291,7 +320,7 @@ const BookingProvider = ({ children }: { children: ReactNode }) => {
                 <Icon name="Check" size={28} />
               </div>
               <p className="font-head text-xl font-bold">
-                Заказ {result.code} оформлен
+                {isDonation ? 'Пожертвование' : 'Заказ'} {result.code} оформлен{isDonation ? 'о' : ''}
               </p>
               {result.qrUrl && (
                 <img
@@ -301,7 +330,9 @@ const BookingProvider = ({ children }: { children: ReactNode }) => {
                 />
               )}
               <p className="text-sm text-muted-foreground">
-                Электронный билет на «{current.title}» отправлен на {form.email}.
+                {form.email
+                  ? `Электронный билет на «${current.title}» отправлен на ${form.email}. `
+                  : `Электронный билет на «${current.title}» готов. `}
                 Покажите QR-код на входе.
               </p>
               {result.paymentUrl && (

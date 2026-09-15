@@ -66,22 +66,25 @@ def make_qr(code: str) -> str:
     return f'https://cdn.poehali.dev/projects/{key_id}/bucket/{key}'
 
 
-def create_payment(code: str, total: int, email: str, title: str, return_url: str):
+def create_payment(code: str, total: int, email: str, title: str, return_url: str,
+                    donation: bool = False):
     shop_id = os.environ.get('YOOKASSA_SHOP_ID', '')
     secret = os.environ.get('YOOKASSA_SECRET_KEY', '')
     if not shop_id or not secret:
         return None, None
     auth = base64.b64encode(f'{shop_id}:{secret}'.encode()).decode()
+    desc = f'Пожертвование, «{title}», заказ {code}' if donation else f'Билеты «{title}», заказ {code}'
+    item_desc = (f'Пожертвование на «{title}»' if donation else f'Билет на «{title}»')[:120]
     payload = json.dumps({
         'amount': {'value': f'{total}.00', 'currency': 'RUB'},
         'capture': True,
         'confirmation': {'type': 'redirect', 'return_url': return_url},
-        'description': f'Билеты «{title}», заказ {code}',
+        'description': desc,
         'metadata': {'code': code},
         'receipt': {
             'customer': {'email': email},
             'items': [{
-                'description': f'Билет на «{title}»'[:120],
+                'description': item_desc,
                 'quantity': '1.00',
                 'amount': {'value': f'{total}.00', 'currency': 'RUB'},
                 'vat_code': 1,
@@ -128,9 +131,17 @@ def send_mail(to_addr: str, subject: str, html: str) -> bool:
         return False
 
 
-def ticket_html(order: dict, show_title: str, when: str, hall: str, qr_url: str, paid: bool) -> str:
+def ticket_html(order: dict, show_title: str, when: str, hall: str, qr_url: str, paid: bool,
+                 donation: bool = False) -> str:
     seats = ' · '.join(f"ряд {s['row']}, место {s['num']}" for s in order['seats'])
-    status = 'Оплачено' if paid else 'Ожидает оплаты'
+    if donation:
+        status = 'Пожертвование получено' if paid else 'Ожидает пожертвования'
+        sum_label = 'Сумма пожертвования'
+        footer = 'Спасибо за поддержку театра! Покажите QR-код на входе.'
+    else:
+        status = 'Оплачено' if paid else 'Ожидает оплаты'
+        sum_label = 'Сумма'
+        footer = 'Покажите QR-код на входе. Зал открывается за 40 минут до начала.'
     return f"""
 <div style="font-family:Arial,sans-serif;background:#1D2230;color:#EEF1F8;padding:28px;border-radius:20px;max-width:560px">
   <p style="letter-spacing:.16em;font-size:12px;color:#98A0B4;margin:0 0 8px">ТЕАТР ГЕЛИОС · ЭЛЕКТРОННЫЙ БИЛЕТ</p>
@@ -139,13 +150,13 @@ def ticket_html(order: dict, show_title: str, when: str, hall: str, qr_url: str,
   <div style="background:#161A26;border-radius:14px;padding:18px;margin-bottom:18px">
     <p style="margin:0 0 6px"><b>Заказ:</b> {order['code']}</p>
     <p style="margin:0 0 6px"><b>Места:</b> {seats}</p>
-    <p style="margin:0 0 6px"><b>Сумма:</b> {order['total']} ₽</p>
+    <p style="margin:0 0 6px"><b>{sum_label}:</b> {order['total']} ₽</p>
     <p style="margin:0"><b>Статус:</b> {status}</p>
   </div>
   <div style="text-align:center;background:#FFFFFF;border-radius:14px;padding:16px">
     <img src="{qr_url}" alt="QR-код билета" width="200" height="200" style="display:block;margin:0 auto" />
   </div>
-  <p style="color:#98A0B4;font-size:13px;margin-top:16px">Покажите QR-код на входе. Зал открывается за 40 минут до начала.</p>
+  <p style="color:#98A0B4;font-size:13px;margin-top:16px">{footer}</p>
 </div>
 """
 
@@ -188,14 +199,22 @@ def handler(event: dict, context) -> dict:
         if not row:
             return response(404, {'error': 'Заказ не найден'})
         order = dict(row)
+        donation = bool(order.get('is_donation'))
         starts = order['starts_at']
         when = f"{starts.day} {MONTHS[starts.month - 1]} · {starts.strftime('%H:%M')}"
-        html = ticket_html(order, order['title'], when, order['hall_caption'], order['qr_url'], True)
-        send_mail(order['email'], f"Билеты оплачены — «{order['title']}»", html)
+        html = ticket_html(order, order['title'], when, order['hall_caption'], order['qr_url'], True, donation)
+        subj = 'Пожертвование получено' if donation else 'Билеты оплачены'
+        send_mail(order['email'], f"{subj} — «{order['title']}»", html)
         admin = os.environ.get('ADMIN_EMAIL', '')
         if admin:
-            send_mail(admin, f"Оплачен заказ {order['code']}", html)
+            send_mail(admin, f"{'Пожертвование' if donation else 'Оплачен заказ'} {order['code']}", html)
         return response(200, {'status': 'paid'})
+
+    cur.execute("SELECT * FROM booking_settings WHERE id = 1")
+    bs = cur.fetchone() or {}
+    name_required = bs.get('name_required', True)
+    email_required = bs.get('email_required', True)
+    phone_required = bs.get('phone_required', True)
 
     name = str(body.get('name', '')).strip()
     email = str(body.get('email', '')).strip()
@@ -205,18 +224,26 @@ def handler(event: dict, context) -> dict:
     total = int(body.get('total') or 0)
     return_url = body.get('returnUrl') or 'https://poehali.dev'
 
-    if not (name and email and phone and session_id and seats):
+    missing = (
+        (name_required and not name)
+        or (email_required and not email)
+        or (phone_required and not phone)
+        or not session_id
+        or not seats
+    )
+    if missing:
         db.close()
         return response(400, {'error': 'Заполните данные и выберите места'})
 
     cur.execute(
-        "SELECT s.id, s.starts_at, s.hall_caption, sh.title FROM sessions s "
+        "SELECT s.id, s.starts_at, s.hall_caption, sh.title, sh.buy_label FROM sessions s "
         f"JOIN shows sh ON sh.id = s.show_id WHERE s.id = {esc(int(session_id))}"
     )
     session = cur.fetchone()
     if not session:
         db.close()
         return response(404, {'error': 'Сеанс не найден'})
+    donation = session.get('buy_label') == 'Пожертвовать'
 
     seat_ids = [str(s.get('id')) for s in seats]
     in_list = ', '.join(esc(s) for s in seat_ids)
@@ -232,13 +259,14 @@ def handler(event: dict, context) -> dict:
 
     code = order_code()
     qr_url = make_qr(code)
-    payment_id, payment_url = create_payment(code, total, email, session['title'], return_url)
+    payment_id, payment_url = create_payment(code, total, email, session['title'], return_url, donation)
 
     cur.execute(
-        "INSERT INTO orders (code, session_id, customer_name, email, phone, seats, total, status, payment_id, payment_url, qr_url) "
+        "INSERT INTO orders (code, session_id, customer_name, email, phone, seats, total, status, "
+        "payment_id, payment_url, qr_url, is_donation) "
         f"VALUES ({esc(code)}, {esc(int(session_id))}, {esc(name)}, {esc(email)}, {esc(phone)}, "
         f"{esc(json.dumps(seats, ensure_ascii=False))}::jsonb, {esc(total)}, 'pending', "
-        f"{esc(payment_id)}, {esc(payment_url)}, {esc(qr_url)}) RETURNING id"
+        f"{esc(payment_id)}, {esc(payment_url)}, {esc(qr_url)}, {esc(donation)}) RETURNING id"
     )
     order_id = cur.fetchone()['id']
     for seat_id in seat_ids:
@@ -251,17 +279,19 @@ def handler(event: dict, context) -> dict:
     starts = session['starts_at']
     when = f"{starts.day} {MONTHS[starts.month - 1]} · {starts.strftime('%H:%M')}"
     order = {'code': code, 'seats': seats, 'total': total}
-    html = ticket_html(order, session['title'], when, session['hall_caption'], qr_url, False)
+    html = ticket_html(order, session['title'], when, session['hall_caption'], qr_url, False, donation)
     if payment_url:
+        pay_word = 'Пожертвовать' if donation else 'Оплатить билеты картой'
         html += (f'<p style="font-family:Arial,sans-serif"><a href="{payment_url}" '
-                 f'style="color:#E3C766">Оплатить билеты картой</a></p>')
-    sent = send_mail(email, f"Ваши билеты на «{session['title']}»", html)
+                 f'style="color:#E3C766">{pay_word}</a></p>')
+    subj = 'Ваше пожертвование' if donation else 'Ваши билеты'
+    sent = send_mail(email, f"{subj} на «{session['title']}»", html)
 
     admin = os.environ.get('ADMIN_EMAIL', '')
     if admin:
         send_mail(
             admin,
-            f"Новая бронь {code} — «{session['title']}»",
+            f"{'Новое пожертвование' if donation else 'Новая бронь'} {code} — «{session['title']}»",
             html + f'<p style="font-family:Arial,sans-serif">Зритель: {name}, {email}, {phone}</p>',
         )
 
@@ -272,4 +302,5 @@ def handler(event: dict, context) -> dict:
         'paymentUrl': payment_url,
         'emailSent': sent,
         'status': 'pending',
+        'isDonation': donation,
     })

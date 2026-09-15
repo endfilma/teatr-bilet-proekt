@@ -16,6 +16,7 @@ import {
   ApiSection,
   ApiHall,
   HallBlock,
+  BookingSettings,
   Catalog,
 } from '@/lib/api';
 import HallEditor from './admin/HallEditor';
@@ -57,6 +58,11 @@ const Admin = () => {
   const [sessionForm, setSessionForm] = useState({ ...emptySession });
   const [orders, setOrders] = useState<Record<string, unknown>[]>([]);
   const [editingHall, setEditingHall] = useState<ApiHall | null | 'new'>(null);
+  const [bookingForm, setBookingForm] = useState<BookingSettings>({
+    nameRequired: true,
+    emailRequired: true,
+    phoneRequired: true,
+  });
 
   const load = async () => {
     const data = await fetchCatalog();
@@ -65,6 +71,7 @@ const Admin = () => {
       setSessionForm((f) => ({ ...f, showId: data.shows[0].id }));
     if (!showForm.hallId && data.halls[0])
       setShowForm((f) => ({ ...f, hallId: data.halls[0].id }));
+    if (data.bookingSettings) setBookingForm(data.bookingSettings);
   };
 
   useEffect(() => {
@@ -197,6 +204,7 @@ const Admin = () => {
               ['sessions', 'Даты сеансов'],
               ['halls', 'Залы'],
               ['sections', 'Разделы сайта'],
+              ['booking', 'Форма заявки'],
               ['orders', 'Заказы'],
             ].map(([v, l]) => (
               <TabsTrigger
@@ -242,6 +250,20 @@ const Admin = () => {
                     aria-label="Скрыть"
                   >
                     <Icon name="EyeOff" size={16} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Удалить спектакль «${s.title}» безвозвратно? Все его сеансы и заказы тоже удалятся.`,
+                        )
+                      )
+                        run({ action: 'delete_show', id: s.id }, 'Спектакль удалён');
+                    }}
+                    className="rounded-full bg-destructive/10 px-3 py-2 text-destructive"
+                    aria-label="Удалить"
+                  >
+                    <Icon name="Trash2" size={16} />
                   </button>
                 </div>
               ))}
@@ -407,6 +429,20 @@ const Admin = () => {
                   >
                     <Icon name="EyeOff" size={16} />
                   </button>
+                  <button
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Удалить сеанс «${s.title}» (${s.date}, ${s.time}) безвозвратно? Связанные заказы тоже удалятся.`,
+                        )
+                      )
+                        run({ action: 'delete_session', id: Number(s.id) }, 'Сеанс удалён');
+                    }}
+                    className="rounded-full bg-destructive/10 px-3 py-2 text-destructive"
+                    aria-label="Удалить"
+                  >
+                    <Icon name="Trash2" size={16} />
+                  </button>
                 </div>
               ))}
             </div>
@@ -545,6 +581,20 @@ const Admin = () => {
                       <Icon name={h.isActive ? 'EyeOff' : 'Eye'} size={16} />
                       {h.isActive ? 'Выключить' : 'Включить'}
                     </button>
+                    <button
+                      onClick={() => {
+                        const used = shows.filter((s) => s.hallId === h.id).length;
+                        const warn = used
+                          ? ` У ${used} спектакля(ей) сейчас выбран этот зал — у них зал сбросится.`
+                          : '';
+                        if (window.confirm(`Удалить зал «${h.name}» безвозвратно?${warn}`))
+                          run({ action: 'delete_hall', id: h.id }, 'Зал удалён');
+                      }}
+                      className="rounded-full bg-destructive/10 px-3 py-2 text-destructive"
+                      aria-label="Удалить"
+                    >
+                      <Icon name="Trash2" size={16} />
+                    </button>
                   </div>
                 ))}
                 <Button
@@ -611,6 +661,53 @@ const Admin = () => {
             ))}
           </TabsContent>
 
+          <TabsContent value="booking" className="mt-0 max-w-lg space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Выберите, какие поля зритель обязан заполнить при оформлении заказа.
+              Отключённое поле останется в форме, но пропустить его можно будет
+              без ошибки.
+            </p>
+            <div className="space-y-3 rounded-2xl bg-card p-5">
+              {(
+                [
+                  ['nameRequired', 'Имя обязательно'],
+                  ['emailRequired', 'Почта обязательна'],
+                  ['phoneRequired', 'Телефон обязателен'],
+                ] as [keyof BookingSettings, string][]
+              ).map(([key, label]) => (
+                <div key={key} className="flex items-center justify-between gap-4">
+                  <p className="font-medium">{label}</p>
+                  <button
+                    onClick={() =>
+                      setBookingForm((f) => ({ ...f, [key]: !f[key] }))
+                    }
+                    className={[
+                      'flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors',
+                      bookingForm[key]
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-foreground/10 text-muted-foreground',
+                    ].join(' ')}
+                  >
+                    <Icon name={bookingForm[key] ? 'Check' : 'X'} size={16} />
+                    {bookingForm[key] ? 'Обязательно' : 'Необязательно'}
+                  </button>
+                </div>
+              ))}
+              <Button
+                disabled={loading}
+                onClick={() =>
+                  run(
+                    { action: 'save_booking_settings', ...bookingForm },
+                    'Настройки формы сохранены',
+                  )
+                }
+                className="rounded-full font-bold"
+              >
+                Сохранить
+              </Button>
+            </div>
+          </TabsContent>
+
           <TabsContent value="orders" className="mt-0 space-y-3">
             {orders.length === 0 && (
               <p className="text-muted-foreground">Заказов пока нет.</p>
@@ -624,9 +721,17 @@ const Admin = () => {
                   {String(o.code)}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium">{String(o.title)}</p>
+                  <p className="font-medium">
+                    {String(o.title)}{' '}
+                    {Boolean(o.is_donation) && (
+                      <span className="rounded-full bg-foreground/10 px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+                        Пожертвование
+                      </span>
+                    )}
+                  </p>
                   <p className="text-sm text-muted-foreground">
-                    {String(o.customer_name)} · {String(o.email)} · {String(o.phone)}
+                    {String(o.customer_name || '—')} · {String(o.email || '—')} ·{' '}
+                    {String(o.phone || '—')}
                   </p>
                 </div>
                 <div className="font-head font-bold">{String(o.total)} ₽</div>
@@ -638,7 +743,13 @@ const Admin = () => {
                       : 'bg-foreground/10 text-muted-foreground',
                   ].join(' ')}
                 >
-                  {o.status === 'paid' ? 'Оплачен' : 'Ожидает оплаты'}
+                  {o.status === 'paid'
+                    ? o.is_donation
+                      ? 'Получено'
+                      : 'Оплачен'
+                    : o.is_donation
+                      ? 'Ожидает пожертвования'
+                      : 'Ожидает оплаты'}
                 </span>
               </div>
             ))}

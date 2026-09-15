@@ -1,6 +1,6 @@
 import { createContext, useContext, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { fetchCatalog, ApiSession, ApiSection, ApiHall } from '@/lib/api';
+import { fetchCatalog, ApiSession, ApiSection, ApiHall, BookingSettings } from '@/lib/api';
 import { Show, shows as fallbackShows } from '@/data/theatre';
 
 export type LiveShow = Show & {
@@ -15,8 +15,15 @@ type CatalogValue = {
   occupied: Record<string, string[]>;
   sections: ApiSection[];
   halls: ApiHall[];
+  bookingSettings: BookingSettings;
   isVisible: (key: string) => boolean;
   isLoading: boolean;
+};
+
+const defaultBookingSettings: BookingSettings = {
+  nameRequired: true,
+  emailRequired: true,
+  phoneRequired: true,
 };
 
 const defaultSections: ApiSection[] = [
@@ -60,6 +67,7 @@ const Ctx = createContext<CatalogValue>({
   occupied: {},
   sections: defaultSections,
   halls: [],
+  bookingSettings: defaultBookingSettings,
   isVisible: () => true,
   isLoading: false,
 });
@@ -95,6 +103,7 @@ export const CatalogProvider = ({ children }: { children: ReactNode }) => {
         occupied: data?.occupied ?? {},
         sections,
         halls: data?.halls ?? [],
+        bookingSettings: data?.bookingSettings ?? defaultBookingSettings,
         isVisible,
         isLoading,
       }}

@@ -74,12 +74,19 @@ export type ApiSection = {
   sortOrder: number;
 };
 
+export type BookingSettings = {
+  nameRequired: boolean;
+  emailRequired: boolean;
+  phoneRequired: boolean;
+};
+
 export type Catalog = {
   sections: ApiSection[];
   halls: ApiHall[];
   shows: ApiShow[];
   sessions: ApiSession[];
   occupied: Record<string, string[]>;
+  bookingSettings: BookingSettings;
 };
 
 export const fetchCatalog = async (): Promise<Catalog> => {
@@ -116,6 +123,7 @@ export type BookingResult = {
   paymentUrl: string | null;
   emailSent: boolean;
   status: string;
+  isDonation: boolean;
 };
 
 export const createBooking = async (payload: {
